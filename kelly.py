@@ -5,20 +5,20 @@ Fractional-Kelly sizing with the Nightwatch EV gate and guardrail overlay.
 Personality shapes what each desk looks at — the math stays honest.
 
 Usage:
-    kelly.py --side yes --price 76 --p 0.85 --bankroll 500 [--fraction 0.25] [--cap 10]
+ kelly.py --side yes --price 76 --p 0.85 --bankroll 500 [--fraction 0.25] [--cap 10]
 
 Math (price c and probability p as decimals):
-    Yes at c:  full Kelly fraction f* = (p - c) / (1 - c)
-    No  at c:  full Kelly fraction f* = ((1 - p) - c) / (1 - c)
+ Yes at c: full Kelly fraction f* = (p - c) / (1 - c)
+ No at c: full Kelly fraction f* = ((1 - p) - c) / (1 - c)
 
 Gates enforced:
-    - EV gate: edge |p - c| must exceed the 5pt probability-error band,
-      i.e. EV stays positive across p +/- 5pts. Otherwise: NO BET.
-    - Fractional Kelly (default 1/4): full Kelly assumes p is exact.
-      Our p estimates are not exact, so we size at --fraction of f*.
-    - --cap: book-level max per trade (M: $1, S: $10, F: $1).
-    - Real-money overlay printed for reference: $1 initial max,
-      $3 daily-loss cap, $5 balance hard stop, $3 max concurrent risk.
+ - EV gate: edge |p - c| must exceed the 5pt probability-error band,
+ i.e. EV stays positive across p +/- 5pts. Otherwise: NO BET.
+ - Fractional Kelly (default 1/4): full Kelly assumes p is exact.
+ Our p estimates are not exact, so we size at --fraction of f*.
+ - --cap: book-level max per trade (M: $1, S: $10, F: $1).
+ - Real-money overlay printed for reference: $1 initial max,
+ $3 daily-loss cap, $5 balance hard stop, $3 max concurrent risk.
 """
 
 import argparse

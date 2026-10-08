@@ -3,7 +3,7 @@
 local tier's qualifier gate.
 
 If a family matches the SOURCE, the output must match the same family —
-checked by qualifier_gate(). Families are near-synonym groups, not single
+checked by qualifier_gate. Families are near-synonym groups, not single
 tokens: "UNVERIFIED single-report" in the source is satisfied by "single
 unconfirmed report" in the output, but NOT by silence. Patterns are bounded
 so a paraphrase with an inserted adjective still matches, while unrelated
@@ -29,7 +29,7 @@ def _present(text: str, pattern: str) -> bool:
 
 def qualifier_gate(src: str, out: str) -> list:
     """Return the names of qualifier families the source carries but the
-    output dropped. Empty list = gate passes."""
+ output dropped. Empty list = gate passes."""
     missing = []
     for canon, pattern in EPISTEMIC.items():
         if _present(src, pattern) and not _present(out, pattern):

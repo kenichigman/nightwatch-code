@@ -6,8 +6,8 @@ with a strict substring match against the source. Any failure — hallucinated
 span, paraphrased span, truncated span, empty/missing spans — fails CLOSED.
 
 Used two ways:
-  1. Imported by bin/local_summarize.py as a post-model gate (exit 2).
-  2. CLI: verify_spans.py --source-file PATH < doc.json  -> exit 0/2.
+ 1. Imported by bin/local_summarize.py as a post-model gate (exit 2).
+ 2. CLI: verify_spans.py --source-file PATH < doc.json -> exit 0/2.
 
 Honest limits: substring existence is grounding of the SPAN, not entailment
 of the CLAIM by the span. A span can exist verbatim yet not support the

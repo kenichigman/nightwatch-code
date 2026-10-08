@@ -2,23 +2,23 @@
 """Brier shadow tracker — the scored side of the calibration log.
 
 Two scoring paths feed brier_shadow.json:
-  1. pending -> scored: mechanical exits (and settle-filed rows) graded at
-     resolution. Rows are filed to "pending" by hand or by
-     `book_trade.py settle`; resolve() moves them to "scored" when their
-     market appears in settled.json.
-  2. ledger-direct (2026-09-27 repair): book rows held in position whose
-     markets settled are scored straight from the JSON ledger's canonical
-     win_p. This closes the gap where in-position resolutions never entered
-     "pending" (e.g. C's btc80k), leaving the mikiri gate (desk_calibration)
-     and calibrate.py blind to graded data the dashboard already showed.
+ 1. pending -> scored: mechanical exits (and settle-filed rows) graded at
+ resolution. Rows are filed to "pending" by hand or by
+ `book_trade.py settle`; resolve moves them to "scored" when their
+ market appears in settled.json.
+ 2. ledger-direct (repair): book rows held in position whose
+ markets settled are scored straight from the JSON ledger's canonical
+ win_p. This closes the gap where in-position resolutions never entered
+ "pending" (e.g. C's btc80k), leaving the mikiri gate (desk_calibration)
+ and calibrate.py blind to graded data the dashboard already showed.
 
 Reads the JSON ledger as the singular source of truth (never PAPER.md —
 the projection renders from the ledger, not the reverse).
 
 Usage:
-  bin/brier.py                 # resolve pending + ledger-direct, print summary
-  bin/brier.py --json          # resolve, print full scored/pending as JSON
-  bin/brier.py --read-only     # report without resolving/writing
+ bin/brier.py # resolve pending + ledger-direct, print summary
+ bin/brier.py --json # resolve, print full scored/pending as JSON
+ bin/brier.py --read-only # report without resolving/writing
 """
 import argparse
 import json

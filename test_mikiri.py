@@ -1,6 +1,6 @@
 """test_mikiri.py — D-003 confidence-bounded EV gate + thesis schema tests.
 
-Gabe's directive (2026-09-26): the static p-price band is replaced by
+The operator's directive: the static p-price band is replaced by
 (win_p - k*sigma_desk) - price > 0.05, and every thesis must name the loser
 and tag the initiative (ken_no_sen | tai_no_sen | tai_tai_no_sen).
 
@@ -69,7 +69,7 @@ def check(name, cond, detail=""):
 
 def test_cold_start_exempt_but_labeled():
     """eff_n=0: static gate applies (today's behavior), receipt tagged
-    mikiri_exempt — the calibration-building duel, never silent."""
+ mikiri_exempt — the calibration-building duel, never silent."""
     with testutil.isolated_home() as home:
         setup(home)
         r = book(home)
@@ -89,8 +89,8 @@ def test_cold_start_exempt_but_labeled():
 
 def test_mikiri_rejects_thin_margin():
     """Desk with history (eff_n~6): p=0.70 @ 60c passes the OLD static gate
-    (10pt edge) but the k*sigma penalty compresses the margin below the band
-    => REJECT with 'mikiri gate', logged."""
+ (10pt edge) but the k*sigma penalty compresses the margin below the band
+ => REJECT with 'mikiri gate', logged."""
     with testutil.isolated_home() as home:
         setup(home)
         seed_scored(home, "M", n=6)
@@ -108,7 +108,7 @@ def test_mikiri_rejects_thin_margin():
 
 def test_mikiri_accepts_wide_margin():
     """Same desk: p=0.92 @ 60c survives the penalty => ACCEPT, receipt
-    carries the mikiri audit block."""
+ carries the mikiri audit block."""
     with testutil.isolated_home() as home:
         setup(home)
         seed_scored(home, "M", n=6)
@@ -125,7 +125,7 @@ def test_mikiri_accepts_wide_margin():
 
 def test_schema_rejects_unreadable():
     """Missing/evasive loser or bad/missing sen => REJECT (exit 3), logged.
-    An unreadable opponent fails validation."""
+ An unreadable opponent fails validation."""
     cases = [
         ("no loser", dict(loser=None)),
         ("evasive loser", dict(loser="x")),
@@ -184,7 +184,7 @@ def test_shadow_inherits_read():
 
 def test_directive_requires_schema():
     """Directives are EV-exempt but not schema-exempt: the read is still
-    declared for tagging."""
+ declared for tagging."""
     with testutil.isolated_home() as home:
         setup(home)
         r = testutil.run_script(home, SCRIPT, "book", "--desk", "M",
@@ -196,14 +196,14 @@ def test_directive_requires_schema():
         check("t6 directive without schema REJECTs", r.returncode == 3,
               r.stdout + r.stderr)
         r2 = book(home, market="mikiri-dir2", extra=("--directive",),
-                  loser="Gabe's direct order", sen="ken_no_sen")
+                  loser="the operator's direct order", sen="no_signal")
         check("t6 directive with schema ACCEPTs", r2.returncode == 0,
               r2.stdout + r2.stderr)
 
 
 def test_sigma_math_spot():
     """sigma(p) = sqrt(p(1-p)/eff_n): spot-check the arithmetic the gate
-    relies on (6 recent rows => eff_n in [5.8, 6.0] after 21d decay)."""
+ relies on (6 recent rows => eff_n in [5.8, 6.0] after 21d decay)."""
     eff = 5.9  # 6 rows scored ~1 day ago: 6 * 0.5**(1/21)
     sig = ((0.7 * 0.3) / eff) ** 0.5
     check("t7 sigma formula sane", 0.18 < sig < 0.20, str(sig))

@@ -2,8 +2,8 @@
 
 Convention (AGENTS.md): tests NEVER run against the real HOME.
 - Preferred: run everything via run_tests.sh, which sandboxes HOME for the
-  whole test process — even a test that forgets this fixture is contained.
-- Per-test: use isolated_home() below for a fresh temp HOME per test case.
+ whole test process — even a test that forgets this fixture is contained.
+- Per-test: use isolated_home below for a fresh temp HOME per test case.
 
 A test that points at the real ledger is a spec violation, not a style issue.
 """
@@ -32,11 +32,11 @@ def isolated_home():
 def setup_hook_heartbeat(home, age_s=0, fetch_ok=1, fetch_fail=0):
     """Write a price-watch heartbeat into the sandboxed HOME.
 
-    The book_trade.py data-health gate (Phase 1.1) fails closed without a
-    fresh heartbeat, so booking tests must prove the sensor is alive.
-    age_s backdates last_tick (stale-heartbeat tests); fetch_ok=0 with
-    fetch_fail>0 simulates a transport-dark tick.
-    """
+ The book_trade.py data-health gate (Phase 1.1) fails closed without a
+ fresh heartbeat, so booking tests must prove the sensor is alive.
+ age_s backdates last_tick (stale-heartbeat tests); fetch_ok=0 with
+ fetch_fail>0 simulates a transport-dark tick.
+ """
     from datetime import datetime, timedelta, timezone
     d = os.path.join(home, "hooks", "state")
     os.makedirs(d, exist_ok=True)
@@ -50,11 +50,11 @@ def setup_hook_heartbeat(home, age_s=0, fetch_ok=1, fetch_fail=0):
 def run_script(home, script, *args, heartbeat=True):
     """Run a goal script with HOME pointed at the isolated home.
 
-    heartbeat=True (default) provisions a fresh price-watch heartbeat first:
-    booking tests assume a live data plane unless the test says otherwise.
-    Pass heartbeat=False when the test controls the heartbeat itself
-    (e.g. data-health gate tests).
-    """
+ heartbeat=True (default) provisions a fresh price-watch heartbeat first:
+ booking tests assume a live data plane unless the test says otherwise.
+ Pass heartbeat=False when the test controls the heartbeat itself
+ (e.g. data-health gate tests).
+ """
     if heartbeat:
         setup_hook_heartbeat(home)
     env = dict(os.environ, HOME=home)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """bin/calibrate.py — offline per-desk probability calibration (ML, read-only).
 
-Gabe 2026-09-26: "use ML if you think best." The honest ML win in this stack is
+The operator: "use ML if you think best." The honest ML win in this stack is
 calibration: map each desk's reported p to its empirical hit rate, so the EV
 gate prices reality instead of self-assessment.
 
@@ -13,9 +13,9 @@ and isotonic regression (PAVA), but ONLY when a desk has >=15 scored rows
 Brier: raw p vs Platt vs isotonic.
 
 Output: hidden_files/calibration_maps.json — READ-ONLY. NOTHING consumes it.
-Doctrine gate (manual-first, Gabe-approved): the maps stay UNWIRED from
-booking until the first propose badge is hand-worked by K3N1 and a golden eval
-set exists. book_trade.py's desk_calibration() keeps reading raw scored rows.
+Doctrine gate (manual-first, operator-approved): the maps stay UNWIRED from
+booking until the first propose badge is hand-worked by the framework and a golden eval
+set exists. book_trade.py's desk_calibration keeps reading raw scored rows.
 """
 import bisect
 import json

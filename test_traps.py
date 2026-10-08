@@ -211,8 +211,8 @@ def test_above_trigger_and_expiry_and_cancel():
 
 def test_volume_gated_trap_fails_closed():
     """A trap armed WITH min_volume_24h is unevaluable in v1 (the hook's
-    data plane carries no volume) — it must stay armed, never silently
-    degrade to price-only."""
+ data plane carries no volume) — it must stay armed, never silently
+ degrade to price-only."""
     with testutil.isolated_home() as home:
         setup(home)
         k = wl_key(home)
@@ -232,8 +232,8 @@ def test_volume_gated_trap_fails_closed():
 # --- execution through the fortress ----------------------------------------
 def test_trap_execution_regated_and_tagged():
     """The trap authorizes the attempt; book_trade.py decides. A directive
-    whose execution price fails the gate REJECTs through the logged path,
-    and an ACCEPT carries trap_id on the receipt."""
+ whose execution price fails the gate REJECTs through the logged path,
+ and an ACCEPT carries trap_id on the receipt."""
     with testutil.isolated_home() as home:
         setup(home)
         k = wl_key(home)
@@ -249,7 +249,7 @@ def test_trap_execution_regated_and_tagged():
             "--side", d["side"], "--price", str(d["price_c"]), "--p", str(d["p"]),
             "--family", d["family"], "--driver", d["driver"],
             "--loser", d["loser"], "--sen", d["sen"], "--trap-id", d["trap_id"],
-            "--note", d["note"])
+            "--note", d["note"], "--confirm-cents")
         check("t6 trap execution ACCEPTs when gate clears", b.returncode == 0,
               b.stdout + b.stderr)
         rows = [e for e in (testutil.read_hidden(home, "book_ledger.jsonl") or [])
@@ -264,7 +264,7 @@ def test_trap_execution_regated_and_tagged():
             "--side", "yes", "--price", "71", "--p", "0.72",
             "--family", "trap-fam2", "--driver", DRV,
             "--loser", "market makers are slow", "--sen", "tai_no_sen",
-            "--trap-id", tid)
+            "--trap-id", tid, "--confirm-cents")
         check("t6 execution REJECTs when gate fails", b.returncode == 3,
               b.stdout + b.stderr)
 
@@ -281,7 +281,7 @@ def test_trap_execution_regated_and_tagged():
 
 
 def test_side_native_no_trap():
-    # Regression 2026-09-26: the first live trap (side=no, below 83.5c)
+    # Regression: the first live trap (side=no, below 83.5c)
     # expired untriggerable because cmd_check compared the hook's Yes-side
     # px against the No-side threshold with no side conversion. Trap arm
     # semantics are side-native; the check must convert.

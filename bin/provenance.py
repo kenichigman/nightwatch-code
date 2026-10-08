@@ -8,30 +8,30 @@ eligible for the paper `shadow` path. That is the structural isolation:
 local tier -> paper freely, local tier -> money never.
 
 Two tag forms:
-  text: [PROVENANCE tier=local host=gdesk model=qwen2.5:14b
-         tool=local_summarize ts=<iso> sha=<32 hex>]
-        prepended as the first line of plain-text output. sha binds the tag
-        to the content that follows (tamper-evident).
-  json: {"provenance": {"tier": "local", "host": ..., "model": ...,
-         "tool": ..., "ts": ..., "sha": ...}}
-        merged into JSON output. sha binds to the canonical serialization
-        of the object minus the provenance key.
+ text: [PROVENANCE tier=local host=gdesk model=qwen2.5:14b
+ tool=local_summarize ts=<iso> sha=<32 hex>]
+ prepended as the first line of plain-text output. sha binds the tag
+ to the content that follows (tamper-evident).
+ json: {"provenance": {"tier": "local", "host": ..., "model": ...,
+ "tool": ..., "ts": ..., "sha": ...}}
+ merged into JSON output. sha binds to the canonical serialization
+ of the object minus the provenance key.
 
 Tier vocabulary (closed):
-  "local"               — LLM output from the gdesk Ollama tier
-  "local_cpu_fallback"  — non-LLM CPU baseline (bin/cpu_fallback.py) emitted
-                          on GPU-guard yield. Degraded cycles are explicitly
-                          tracked and never conflated with qwen2.5:14b runs.
+ "local" — LLM output from the gdesk Ollama tier
+ "local_cpu_fallback" — non-LLM CPU baseline (bin/cpu_fallback.py) emitted
+ on GPU-guard yield. Degraded cycles are explicitly
+ tracked and never conflated with qwen2.5:14b runs.
 Both tiers are refused on the real-money path; both are paper-eligible.
 
 Threat model (honest limits):
-  - Forging a tag only causes refusal: fail-closed, safe direction.
-  - Stripping a tag defeats detection: this is a cooperative marker, not
-    a cryptographic guarantee against an adversary rewriting the payload.
-    The pipeline's own scripts are required to emit it; the 30-day tier
-    review ledger tracks what the local tier decided.
-  - Detection scans every string field of the booking command, so tagged
-    content smuggled through --thesis, --note, --market, etc. is caught.
+ - Forging a tag only causes refusal: fail-closed, safe direction.
+ - Stripping a tag defeats detection: this is a cooperative marker, not
+ a cryptographic guarantee against an adversary rewriting the payload.
+ The pipeline's own scripts are required to emit it; the 30-day tier
+ review ledger tracks what the local tier decided.
+ - Detection scans every string field of the booking command, so tagged
+ content smuggled through --thesis, --note, --market, etc. is caught.
 """
 
 import hashlib

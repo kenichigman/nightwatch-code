@@ -6,12 +6,12 @@ tripwires (canary set, cryptographic pins). Evaluates the trailing
 local_tier_heartbeat.jsonl log on every pre-flight and trips when the
 LLM path shows:
 
-  - hard cliff: 2 consecutive llm_transport_failed (a down server is a
-    binary infrastructure state; a third 19s cycle proves nothing), or
-    3 consecutive faults of any class (gate_refused / llm_bad_output /
-    llm_transport_failed);
-  - slow rot: faults in >= 50% of the trailing 10 LLM attempts
-    (minimum 5 attempts before the density rule can fire).
+ - hard cliff: 2 consecutive llm_transport_failed (a down server is a
+ binary infrastructure state; a third 19s cycle proves nothing), or
+ 3 consecutive faults of any class (gate_refused / llm_bad_output /
+ llm_transport_failed);
+ - slow rot: faults in >= 50% of the trailing 10 LLM attempts
+ (minimum 5 attempts before the density rule can fire).
 
 On trip, writes hidden_files/circuit.trip and appends the incident to
 hidden_files/circuit_history.jsonl (append-only incident record). The
@@ -19,12 +19,12 @@ tier refuses all invocations until the trip file is manually reviewed
 and cleared — OR until the half-open probe (below) verifies recovery
 itself.
 
-Half-open state (added 2026-10-01, Gabe directive): a latched trip is a
-blind spot after recovery — the 2026-09-30/10-01 Ollama outage was fixed
-~01:05 CDT but the breaker kept refusing on a stale timestamp for 9
+Half-open state (the operator's directive): a latched trip is a
+blind spot after recovery — the Ollama outage was fixed
+but the breaker kept refusing on a stale timestamp for 9
 cycles because no new heartbeat entries can accrue while the tier
 refuses. So before the pre-flight refuses on circuit.trip, it calls
-half_open_probe(): if the trip is older than HALF_OPEN_INTERVAL since the
+half_open_probe: if the trip is older than HALF_OPEN_INTERVAL since the
 last probe, the breaker re-probes the tier directly (two-signal:
 /api/tags then a minimal /api/generate through the tunnel proxy). Probe
 success auto-clears the trip and records a half_open_clear incident;
@@ -35,17 +35,17 @@ and it never touches canary.trip / pin.trip (deterministic tripwires
 stay manual-clear only).
 
 Vocabulary stratification:
-  faults   : llm_transport_failed, gate_refused, llm_bad_output
-  benign   : llm_ok (resets consecutive counters); gpu_busy_yield,
-             guard_unreachable_yield, skipped_no_input (neutral: neither
-             increment nor reset; non-attempts never dilute the density
-             denominator, and the designed CPU fallback is never
-             punished for working)
-  excluded : any entry whose detail names canary_trip / pin_trip /
-             circuit_trip (anti-feedback: trip-driven refusals must not
-             stack phantom breaker trips on top of real ones).
+ faults: llm_transport_failed, gate_refused, llm_bad_output
+ benign: llm_ok (resets consecutive counters); gpu_busy_yield,
+ guard_unreachable_yield, skipped_no_input (neutral: neither
+ increment nor reset; non-attempts never dilute the density
+ denominator, and the designed CPU fallback is never
+ punished for working)
+ excluded: any entry whose detail names canary_trip / pin_trip /
+ circuit_trip (anti-feedback: trip-driven refusals must not
+ stack phantom breaker trips on top of real ones).
 
-Post-clear re-trip guard: evaluate() ignores heartbeat entries at or
+Post-clear re-trip guard: evaluate ignores heartbeat entries at or
 before the newest entry timestamp recorded by the most recent trip
 incident. Without this, clearing the trip file would re-trip on the
 same evidence on the very next pre-flight (no new entries can accrue
@@ -91,12 +91,12 @@ def _is_trip_refusal(detail: str) -> bool:
 def _last_trip_watermark(history_path: str = HISTORY) -> str:
     """Newest heartbeat entry ts consumed by the most recent trip incident.
 
-    Returns "" when no incident is recorded (fail-open: evaluate everything).
-    Skips non-trip records (e.g. half_open_clear) so an auto-clear never
-    moves the watermark — post-clear evaluation must ignore the same
-    evidence the trip already consumed, exactly as after a manual clear.
-    Records predating the kind field are treated as trips.
-    """
+ Returns "" when no incident is recorded (fail-open: evaluate everything).
+ Skips non-trip records (e.g. half_open_clear) so an auto-clear never
+ moves the watermark — post-clear evaluation must ignore the same
+ evidence the trip already consumed, exactly as after a manual clear.
+ Records predating the kind field are treated as trips.
+ """
     try:
         with open(history_path) as f:
             lines = f.readlines()
@@ -219,9 +219,9 @@ def _tunnel_proxy() -> str:
 def _probe_tier(timeout: int = 30) -> tuple:
     """Two-signal liveness probe: /api/tags, then a minimal /api/generate.
 
-    Returns (ok, detail). Never raises; never writes to the heartbeat log.
-    Same route as ollama_local.py (tunnel proxy port 3130, not direct).
-    """
+ Returns (ok, detail). Never raises; never writes to the heartbeat log.
+ Same route as ollama_local.py (tunnel proxy port 3130, not direct).
+ """
     try:
         proxy = _tunnel_proxy()
         os.environ["https_proxy"] = proxy
@@ -260,10 +260,10 @@ def half_open_probe(trip_path: str = CIRCUIT_TRIP,
                     now: float | None = None) -> tuple:
     """Re-probe a latched trip on schedule; auto-clear on recovery.
 
-    Returns (acted, detail). Only ever touches the circuit trip file —
-    canary.trip / pin.trip are never probed or cleared here.
-    Fail-closed: any probe or I/O failure leaves the trip in place.
-    """
+ Returns (acted, detail). Only ever touches the circuit trip file —
+ canary.trip / pin.trip are never probed or cleared here.
+ Fail-closed: any probe or I/O failure leaves the trip in place.
+ """
     if now is None:
         now = time.time()
     try:

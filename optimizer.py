@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""optimizer.py — Phase 3.1 portfolio optimizer scaffold (2026-09-26).
+"""optimizer.py — Phase 3.1 portfolio optimizer scaffold.
 
 STRICTLY OFF-PATH: pure stateless function. No I/O, no global state, no
 production/hook/auth/booking/shadow-soak wiring. This is a research scaffold
@@ -7,13 +7,13 @@ for synthetic testing only — it does not read the ledger, does not place
 trades, and is not called by any worker.
 
 Pipeline:
-  1. Kalman update: each market's noisy edge observation is fused with the
-     prior (P_0, c_hat_0) to produce a posterior edge estimate.
-  2. Volatility-scaled Huber cap: the posterior is robustified — outliers
-     beyond delta*volatility are capped, not discarded.
-  3. Edge → position: Kelly-style sizing (edge / variance), capped per-market.
-  4. L1 portfolio constraint: if gross exposure exceeds the limit, scale all
-     positions down proportionally (sparsity-preserving: zeros stay zero).
+ 1. Kalman update: each market's noisy edge observation is fused with the
+ prior (P_0, c_hat_0) to produce a posterior edge estimate.
+ 2. Volatility-scaled Huber cap: the posterior is robustified — outliers
+ beyond delta*volatility are capped, not discarded.
+ 3. Edge → position: Kelly-style sizing (edge / variance), capped per-market.
+ 4. L1 portfolio constraint: if gross exposure exceeds the limit, scale all
+ positions down proportionally (sparsity-preserving: zeros stay zero).
 
 All inputs explicit. Deterministic given inputs.
 """
@@ -51,9 +51,9 @@ def kalman_update(prior_mean, prior_var, observation, obs_var, process_var):
 def huber_cap(x, delta):
     """Huber robustification: linear beyond |delta|, quadratic within.
 
-    Returns the capped value. Preserves sign. If delta <= 0, returns 0
-    (no trust in the signal at all).
-    """
+ Returns the capped value. Preserves sign. If delta <= 0, returns 0
+ (no trust in the signal at all).
+ """
     if delta <= 0:
         return 0.0
     if x > delta:
@@ -72,23 +72,23 @@ def optimize_portfolio(snapshots, portfolio,
                        kelly_fraction=0.25):
     """Pure function: (snapshots, portfolio, params) -> {market_id: target_size}.
 
-    Args:
-        snapshots: list[MarketSnapshot] — one per candidate market.
-        portfolio: list[PortfolioPosition] — current holdings (informational;
-            the optimizer outputs TARGET sizes, not deltas).
-        kalman_P0: initial error covariance (prior uncertainty).
-        kalman_c0: initial state estimate (prior edge belief).
-        kalman_Q: process noise variance (how fast the true edge drifts).
-        kalman_R: observation noise variance (how noisy edge_obs is).
-        huber_delta_vols: Huber threshold in units of market volatility.
-        l1_limit: max sum of |target sizes| (gross exposure cap).
-        max_position: max |target size| per market.
-        kelly_fraction: fractional Kelly multiplier on edge/variance sizing.
+ Args:
+ snapshots: list[MarketSnapshot] — one per candidate market.
+ portfolio: list[PortfolioPosition] — current holdings (informational;
+ the optimizer outputs TARGET sizes, not deltas).
+ kalman_P0: initial error covariance (prior uncertainty).
+ kalman_c0: initial state estimate (prior edge belief).
+ kalman_Q: process noise variance (how fast the true edge drifts).
+ kalman_R: observation noise variance (how noisy edge_obs is).
+ huber_delta_vols: Huber threshold in units of market volatility.
+ l1_limit: max sum of |target sizes| (gross exposure cap).
+ max_position: max |target size| per market.
+ kelly_fraction: fractional Kelly multiplier on edge/variance sizing.
 
-    Returns:
-        dict mapping market_id -> target position size (signed float).
-        Empty dict if no snapshots. Never None.
-    """
+ Returns:
+ dict mapping market_id -> target position size (signed float).
+ Empty dict if no snapshots. Never None.
+ """
     if not snapshots:
         return {}
     if l1_limit < 0:
@@ -108,7 +108,7 @@ def optimize_portfolio(snapshots, portfolio,
         # 2. Volatility-scaled Huber: cap outliers at delta vols
         capped = huber_cap(post_mean, huber_delta_vols * s.volatility)
         # 3. Edge -> position: fractional Kelly on estimated edge
-        #    size ~ edge / variance, scaled by kelly_fraction
+        # size ~ edge / variance, scaled by kelly_fraction
         raw = kelly_fraction * capped / (s.volatility ** 2)
         # Per-market cap
         if raw > max_position:

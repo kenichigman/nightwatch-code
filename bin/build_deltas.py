@@ -1,37 +1,37 @@
 #!/usr/bin/env python3
-"""build_deltas.py — closed-loop delta records for Nightwatch (Gabe's directive 2026-09-26 ~02:53 CDT).
+"""build_deltas.py — closed-loop delta records for Nightwatch (the operator's directive).
 
 The disconfirmation diet, as data: one DeltaRecord per scored prediction —
 thesis (verbatim, never re-derived from news), p_side, outcome, realized
 P&L, edge at entry, mechanical-exit flag, and the pre-registered
 kill-criterion IDs evaluated for its desk. structural_failure is ALWAYS null
-from this builder; it is filled by review (07:11 delta step or K3N1), never
+from this builder; it is filled by review (07:11 delta step or the framework), never
 by construction.
 
 Mapping onto the REAL architecture (the directive named fictional files):
-  - Scored predictions = PAPER.md ## Ledger rows x hidden_files/settled.json
-    (the same join brier.py grades — book rows carry p_side directly).
-  - Enrichment from hidden_files/book_ledger.jsonl receipts: edge_pts at
-    entry, exit receipts (mechanical-exit flag + exit-computed P&L), settle
-    receipts (realized P&L). Receipt notes are preferred for thesis_verbatim
-    when the receipt is a real booking; bootstrap stubs fall back to the
-    PAPER.md thesis cell (verbatim).
-  - brier_shadow.json scored rows cover exit-graded predictions with no
-    ledger row (ledger takes precedence on (desk, market) collision —
-    brier.py's rule).
-  - hidden_files/rejections.jsonl rows since the timestamp ride along as
-    rejected candidates (not scored predictions — they have no outcome).
+ - Scored predictions = PAPER.md ## Ledger rows x hidden_files/settled.json
+ (the same join brier.py grades — book rows carry p_side directly).
+ - Enrichment from hidden_files/book_ledger.jsonl receipts: edge_pts at
+ entry, exit receipts (mechanical-exit flag + exit-computed P&L), settle
+ receipts (realized P&L). Receipt notes are preferred for thesis_verbatim
+ when the receipt is a real booking; bootstrap stubs fall back to the
+ PAPER.md thesis cell (verbatim).
+ - brier_shadow.json scored rows cover exit-graded predictions with no
+ ledger row (ledger takes precedence on (desk, market) collision —
+ brier.py's rule).
+ - hidden_files/rejections.jsonl rows since the timestamp ride along as
+ rejected candidates (not scored predictions — they have no outcome).
 
 READ-ONLY on real state: reads the files above + LESSONS.md. Writes ONLY to
 stdout (or --out). Never invents: unknowable P&L stays null, undated records
 are included rather than silently dropped.
 
 Usage:
-  python3 bin/build_deltas.py [--since SINCE] [--out PATH] [--root DIR]
-  --since: YYYY-MM-DD (day-granular, conservative) or a CDT timestamp
-    'YYYY-MM-DD HH:MM[:SS]' / ISO with offset for finer cuts. Default: the
-    last "## YYYY-MM-DD -- delta review" header in LESSONS.md (all records
-    when no review exists yet).
+ python3 bin/build_deltas.py [--since SINCE] [--out PATH] [--root DIR]
+ --since: YYYY-MM-DD (day-granular, conservative) or a CDT timestamp
+ 'YYYY-MM-DD HH:MM[:SS]' / ISO with offset for finer cuts. Default: the
+ last "## YYYY-MM-DD -- delta review" header in LESSONS.md (all records
+ when no review exists yet).
 """
 import argparse
 import json
@@ -106,9 +106,9 @@ def parse_date(raw):
 
 def parse_since(s):
     """--since: 'YYYY-MM-DD' (day-granular — conservative, matches the
-    day-precision of LESSONS.md delta-review headers) or a full timestamp
-    ('YYYY-MM-DD HH:MM[:SS]' in CDT, or ISO with offset) for finer cuts.
-    Returns ('date', date) or ('ts', aware datetime)."""
+ day-precision of LESSONS.md delta-review headers) or a full timestamp
+ ('YYYY-MM-DD HH:MM[:SS]' in CDT, or ISO with offset) for finer cuts.
+ Returns ('date', date) or ('ts', aware datetime)."""
     s = str(s).strip()
     m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", s)
     if m:
@@ -132,7 +132,7 @@ def parse_since(s):
 
 def since_excludes(since, rec_dt):
     """True when the record predates the watermark. Day-granularity input
-    excludes the whole day (conservative); timestamp input is strict."""
+ excludes the whole day (conservative); timestamp input is strict."""
     if since is None or rec_dt is None:
         return False
     kind, val = since
@@ -162,8 +162,8 @@ def norm_slug(raw):
 
 def parse_paper_ledger(root):
     """Parse PAPER.md ## Ledger (same table brier.py grades). Returns rows:
-    {desk, market (norm_slug'd), side, p_side|None, thesis, ev_gate,
-     pnl|None, exit_cell}."""
+ {desk, market (norm_slug'd), side, p_side|None, thesis, ev_gate,
+ pnl|None, exit_cell}."""
     path = os.path.join(root, "PAPER.md")
     rows = []
     try:
@@ -231,14 +231,14 @@ def p_side_of(receipt):
 def exit_pnl(book, exit_rec):
     """Realized P&L of a pre-resolution exit, same math as book_trade exit."""
     # Prefer the receipt's own realized P&L (book_trade records it since the
-    # 2026-09-26 terminal-closure change); fall back to recomputation.
+    # terminal-closure change); fall back to recomputation.
     if exit_rec.get("realized_pnl_usd") is not None:
         return round(exit_rec["realized_pnl_usd"], 2)
     entry = book["price_c"]
     shares = book["size_usd"] / (entry / 100.0)
     ex = exit_rec["exit_price_c"]
     # Side-agnostic: the ledger prices the purchased token, so P&L is
-    # (exit - entry) regardless of side (2026-09-26 sign fix — the old
+    # (exit - entry) regardless of side (sign fix — the old
     # No-branch flipped the sign and printed profits on losses).
     move = ex - entry
     return round(move / 100.0 * shares, 2)

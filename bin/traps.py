@@ -7,9 +7,9 @@ brain does the reading and pre-registers an algorithmic trap; the hook is only
 the tripwire.
 
 Two append-only logs with separated concerns:
-  hidden_files/book_ledger.jsonl  = RISK TAKEN (written only by book_trade.py)
-  hidden_files/traps.jsonl        = INTENT ARMED (armed/cancelled by the loop,
-                                    triggered/expired by the hook)
+ hidden_files/book_ledger.jsonl = RISK TAKEN (written only by book_trade.py)
+ hidden_files/traps.jsonl = INTENT ARMED (armed/cancelled by the loop,
+ triggered/expired by the hook)
 
 The hook NEVER writes to the ledger. On a trigger it invokes book_trade.py,
 which re-enforces every gate (kill switch, mikiri, caps, correlation,
@@ -18,36 +18,36 @@ is authorization to *attempt*, never a bypass — and the trap carries no size,
 so D-001's "sizing computed, never chosen" survives the 59-minute fuse.
 
 Subcommands:
-  arm      --desk D --market KEY --slug S --venue com|us --side yes|no
-           --trigger below|above --trigger-px-c C --current-px-c NOW --p P
-           --family F --driver DR --loser L --sen SE --arming-margin-pts M
-           --armed-by CYCLE [--min-volume-24h N] [--note T]
-           Appends an `armed` event after validation:
-             - trigger beyond current price in the trigger direction
-               (below: trigger < current; above: trigger > current)
-             - arming margin in (0, 5): positive edge that has NOT crossed
-               the band — a setup that already clears is booked directly,
-               never trapped
-             - <= TRAP_MAX_ARMED armed traps total, <= 1 per market
-             - market key on WATCHLIST.json; desk/sen/loser validated the
-               same way book_trade.py validates them (a trap cannot arm an
-               invalid thesis)
-           Expiry = armed + TRAP_FUSE_MIN minutes (59).
-  cancel   --trap-id ID --reason R --by WHO     (loop kills a stale thesis)
-  armed    print the currently armed set as JSON (derived by replay)
-  check    --prices PATH   (PATH: JSON {watchlist_key: {px, prev_px}},
-           px in 0-1 fractions as the hook reports them)
-           Replays the log, appends `expired` for past-expiry traps,
-           evaluates crossings, appends `triggered` BEFORE printing the
-           execution directive (crash-safe one-shot: a dead hook can never
-           double-fire). Prints one JSON directive per line:
-             {trap_id, desk, market, slug, venue, side, price_c, p, loser,
-              sen, driver, family, note}
-           price_c = observed trigger price in cents (adverse-touch
-           convention — the script re-gates at this price).
-  settle   --trap-id ID --result accept|reject|kill --detail T
-           [--receipt R]
-           Appends `trap_settled` with the script's verdict.
+ arm --desk D --market KEY --slug S --venue com|us --side yes|no
+ --trigger below|above --trigger-px-c C --current-px-c NOW --p P
+ --family F --driver DR --loser L --sen SE --arming-margin-pts M
+ --armed-by CYCLE [--min-volume-24h N] [--note T]
+ Appends an `armed` event after validation:
+ - trigger beyond current price in the trigger direction
+ (below: trigger < current; above: trigger > current)
+ - arming margin in (0, 5): positive edge that has NOT crossed
+ the band — a setup that already clears is booked directly,
+ never trapped
+ - <= TRAP_MAX_ARMED armed traps total, <= 1 per market
+ - market key on WATCHLIST.json; desk/sen/loser validated the
+ same way book_trade.py validates them (a trap cannot arm an
+ invalid thesis)
+ Expiry = armed + TRAP_FUSE_MIN minutes (59).
+ cancel --trap-id ID --reason R --by WHO (loop kills a stale thesis)
+ armed print the currently armed set as JSON (derived by replay)
+ check --prices PATH (PATH: JSON {watchlist_key: {px, prev_px}},
+ px in 0-1 fractions as the hook reports them)
+ Replays the log, appends `expired` for past-expiry traps,
+ evaluates crossings, appends `triggered` BEFORE printing the
+ execution directive (crash-safe one-shot: a dead hook can never
+ double-fire). Prints one JSON directive per line:
+ {trap_id, desk, market, slug, venue, side, price_c, p, loser,
+ sen, driver, family, note}
+ price_c = observed trigger price in cents (adverse-touch
+ convention — the script re-gates at this price).
+ settle --trap-id ID --result accept|reject|kill --detail T
+ [--receipt R]
+ Appends `trap_settled` with the script's verdict.
 
 One-shot semantics: a trap executes at most once. After `triggered` it is
 consumed — ACCEPT, REJECT, or kill exit 4 all end it. The hook never re-arms;
@@ -55,7 +55,7 @@ only the next hourly loop may arm a fresh trap.
 
 v1 trigger language is price-crossing only. min_volume_24h is reserved:
 the hook's data plane carries no volume yet (state is {px, in_band}), so a
-trap armed WITH a volume requirement is UNEVALUABLE — check() refuses to
+trap armed WITH a volume requirement is UNEVALUABLE — check refuses to
 evaluate it (stays armed until expiry) rather than silently degrading to
 price-only. Fail closed.
 """
@@ -68,7 +68,7 @@ from zoneinfo import ZoneInfo
 
 CDT = ZoneInfo("America/Chicago")
 # HOME-relative (not script-relative): tests sandbox HOME via run_tests.sh,
-# and per-test via testutil.isolated_home(). A script-location ROOT would
+# and per-test via testutil.isolated_home. A script-location ROOT would
 # let a test touch the real traps.jsonl — a spec violation.
 ROOT = os.path.expanduser("~/workspace/goals/10-polymarket-experiment")
 TRAPS = os.path.join(ROOT, "hidden_files", "traps.jsonl")
@@ -81,7 +81,7 @@ MIKIRI_BAND_PTS = 5.0       # arming margin must sit BELOW this (not crossed)
 
 sys.path.insert(0, ROOT)
 try:
-    import book_trade  # noqa: E402  (DESKS, SEN_CHOICES, MIKIRI_MIN_LOSER_LEN)
+    import book_trade  # noqa: E402 (DESKS, SEN_CHOICES, MIKIRI_MIN_LOSER_LEN)
 except ImportError:
     # Sandboxed tests: state lives under the sandbox HOME, but the code
     # under test is the real repo — import constants from the script's own
@@ -115,9 +115,9 @@ def append_event(ev):
 def armed_set(events=None):
     """Derived state: armed traps = armed minus (triggered|expired|cancelled).
 
-    Never stored as primary state — always replayed. A trap that fired is
-    consumed even if the booking that followed was REJECTed: one-shot.
-    """
+ Never stored as primary state — always replayed. A trap that fired is
+ consumed even if the booking that followed was REJECTed: one-shot.
+ """
     events = load_events() if events is None else events
     armed = {}
     for ev in events:
@@ -246,7 +246,7 @@ def cmd_armed(_a):
 
 def cmd_check(a):
     """The hook's tripwire evaluation. Appends triggered/expired BEFORE
-    printing directives — crash-safe one-shot."""
+ printing directives — crash-safe one-shot."""
     try:
         with open(a.prices) as f:
             prices = json.load(f)
@@ -283,7 +283,7 @@ def cmd_check(a):
         # trap arm semantics are side-native (trigger_px_c is the trapped
         # side's own cents), so convert before comparing. Without this, a
         # No-side trap compares Yes prices against a No threshold and can
-        # never trigger (first live trap 2026-09-26 expired untriggerable).
+        # never trigger (first live trap expired untriggerable).
         if ev.get("side") == "no":
             cur, prev = 1 - cur, 1 - prev
         thr = ev["trigger_px_c"] / 100.0

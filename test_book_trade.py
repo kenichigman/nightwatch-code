@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """test_book_trade.py — regression tests for the Nightwatch booking gate.
 
-Gabe's locked work (2026-09-28): booking regression tests required, and
+The operator's locked work: booking regression tests required, and
 cents/dollars ambiguity impossible by construction.
 
 Every test runs against a tmp dir (all of book_trade's path constants are
 repointed in setUp) — the real ledger, worker_state, and hook files are
 never touched.
 
-Run:  python3 test_book_trade.py
+Run: python3 test_book_trade.py
 """
 import argparse
 import io
@@ -85,9 +85,9 @@ class BookTradeTestBase(unittest.TestCase):
             json.dump({"pending": [], "scored": []}, f)  # cold start: sigma None
         with open(f"{t}/hidden_files/worker_state.json", "w") as f:
             json.dump({}, f)
-        # Honest-fill stub (2026-10-06): cmd_book/cmd_shadow/cmd_exit walk a
+        # Honest-fill stub: cmd_book/cmd_shadow/cmd_exit walk a
         # live book; tests inject snapshots via NIGHTWATCH_BOOK_STUB instead.
-        # set_book() writes a deep two-sided book at price_c for a market.
+        # set_book writes a deep two-sided book at price_c for a market.
         self._book_stub_path = f"{t}/book_stub.json"
         with open(self._book_stub_path, "w") as f:
             json.dump({}, f)
@@ -107,8 +107,8 @@ class BookTradeTestBase(unittest.TestCase):
     def set_book(self, market, price_c, venue="com", tags=("geopolitics",),
                  depth_usd=1e9, spread_c=1.0):
         """Deep two-sided stub book at price_c (fee-free geopolitics default
-        keeps legacy P&L assertions stable; pass tags=("sports",) to test
-        fees). depth_usd sizes each side's total; spread_c separates touch."""
+ keeps legacy P&L assertions stable; pass tags=("sports") to test
+ fees). depth_usd sizes each side's total; spread_c separates touch."""
         p = price_c / 100.0
         bid_p = max(p - spread_c / 100.0, 0.01)
         # Ask touch == limit: fills at the worker's price by construction.
@@ -188,7 +188,7 @@ class TestUnitTripwire(BookTradeTestBase):
 
     def test_book_no_poller_quote_fails_closed(self):
         # Off-watchlist market: units unverifiable — new risk is never
-        # booked blind. (2026-09-28 repair #2: was fail-open.)
+        # booked blind. (repair #2: was fail-open.)
         code, out = self.quiet(
             bt.cmd_book, self.book_ns(market="mkt-offlist", price=0.87, p=0.6))
         self.assertEqual(code, 3)
@@ -368,7 +368,7 @@ class TestKellyConstruction(unittest.TestCase):
         self.assertIsNone(size)
 
     def test_exact_cap_not_shaved(self):
-        # The original 2026-09-28 bug: $1.00 floored to $0.95 by binary
+        # The original bug: $1.00 floored to $0.95 by binary
         # float error. Exact integer-cent math keeps it at $1.00.
         size, _, _ = bt.kelly_size("yes", 13.0, 0.6, 10.0, 1.0, 0.25, None)
         self.assertEqual(size, 1.0)
@@ -476,9 +476,9 @@ class TestHardGates(BookTradeTestBase):
 
 
 class TestXExploration(BookTradeTestBase):
-    """X exploration account (2026-10-05 recharter): originates freely, no
-    EV gate; honesty gates (price units, settled universe, driver taxonomy,
-    thesis schema) still bind; family/driver caps do not."""
+    """X exploration account (recharter): originates freely, no
+ EV gate; honesty gates (price units, settled universe, driver taxonomy,
+ thesis schema) still bind; family/driver caps do not."""
 
     def _xbook(self, **kw):
         d = dict(desk="X", market="xmkt-alpha", side="yes", price=50.0,
@@ -495,7 +495,7 @@ class TestXExploration(BookTradeTestBase):
         self.assertEqual(code, 0)
         rec = bt.load_ledger()[-1]
         self.assertEqual(rec["desk"], "X")
-        # Breadth-first (2026-10-06): $2k depth-capped target, not $20k flat.
+        # Breadth-first: $2k depth-capped target, not $20k flat.
         self.assertEqual(rec["size_usd"], 2000.0)
         self.assertEqual(rec["attempted_usd"], 2000.0)
         self.assertEqual(rec["unfilled_usd"], 0.0)
@@ -553,9 +553,9 @@ class TestXExploration(BookTradeTestBase):
 
 
 class TestHonestFills(BookTradeTestBase):
-    """2026-10-06: the book walk replaces the 0.5c haircut. Entries fail
-    closed without a depth snapshot; clips are depth-capped at 1c of touch;
-    taker fees are modeled and deducted."""
+    """: the book walk replaces the 0.5c haircut. Entries fail
+ closed without a depth snapshot; clips are depth-capped at 1c of touch;
+ taker fees are modeled and deducted."""
 
     def test_no_snapshot_refuses_entry(self):
         # Stub is empty: no honest fill exists — fail closed, never assumed.
@@ -577,7 +577,7 @@ class TestHonestFills(BookTradeTestBase):
         self.assertIn("within limit", out)
 
     def test_large_clip_slippage_on_thin_book(self):
-        # Guaranteed-binding engine test (N1K3, 2026-10-06): a $2000 X clip
+        # Guaranteed-binding engine test (the reviewer): a $2000 X clip
         # against a thin three-level book must show slippage — VWAP worse
         # than the touch — independent of what live fills look like.
         snap = {"venue": "us", "tags": ["geopolitics"],
@@ -627,7 +627,7 @@ class TestHonestFills(BookTradeTestBase):
         self.assertGreater(rec["fee_usd"], 0)
         self.assertEqual(rec["fee_category"], "sports")
         self.assertFalse(rec["fee_unknown"])
-        # Fill-regime tag (2026-10-06): scoring panels split on this.
+        # Fill-regime tag: scoring panels split on this.
         self.assertEqual(rec["fill_model"], "v2-bookwalk")
         # fee = shares * 0.05 * 0.5 * 0.5; $1 directive -> 2 shares -> $0.025
         self.assertAlmostEqual(rec["fee_usd"], 0.03, places=2)

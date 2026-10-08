@@ -9,16 +9,16 @@ choke point) and records their ids in hidden_files/doctrine.trip.
 book_trade.py refuses new risk (book/shadow/bootstrap, exit 4) while that
 file is non-empty; `exit` stays live (flatten, don't freeze).
 
-Scoping (Gabe-approved 2026-09-26 ~04:33 CDT):
+Scoping (operator-approved):
 - Only kill-class proposals on D-001/D-003/D-004 trip. Governance filings
-  (D-002 cap, liturgy silence tripwires, review revisit-dues) endanger no
-  capital and stay loud-but-manual — the machine does not flinch at
-  paperwork.
+ (D-002 cap, liturgy silence tripwires, review revisit-dues) endanger no
+ capital and stay loud-but-manual — the machine does not flinch at
+ paperwork.
 - Only MECHANICAL measurements trip. MANUAL triggers and R kill-notes file
-  proposals; a mind adjudicates. Advisory nodes never get a hard veto.
+ proposals; a mind adjudicates. Advisory nodes never get a hard veto.
 
 Asymmetric clearance: this script (and the worker) may WRITE the trip file;
-only K3N1 or Gabe clears it — after adjudicating the proposal
+only the framework or the operator clears it — after adjudicating the proposal
 (reaffirm/revise/retire), fixing the enforcement, and logging the
 resolution EVENT:. The worker never clears its own trip.
 

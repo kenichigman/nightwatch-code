@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Recompute PAPER.md's scoreboard from the ledger table.
 
-Gabe directive 2026-10-02: a manual scoreboard monitoring an automated
+The operator's directive: a manual scoreboard monitoring an automated
 pipeline is an architectural contradiction. This script derives the
 scoreboard's numeric columns directly from the ledger rows, so the two
 can never drift.
@@ -9,24 +9,24 @@ can never drift.
 Rules (ratified by construction):
 - Source of truth: the ledger table between LEDGER-TABLE-BEGIN/END.
 - Per desk (M/S/F/Q/C): realized = sum of P&L cells (first number in the
-  cell; Unicode minus handled), trades = total rows, wins = P&L > 0,
-  win_rate = wins/trades (— when trades == 0).
-- Fill-regime split (2026-10-06): the ledger table's Fill column tags each
-  row v1 (0.5c haircut, no fees) or v2 (book-walk VWAP + taker fees). The two
-  regimes are NOT pooled — the Realized P&L cell renders the all-time total
-  with the v2-regime subtotal in parentheses, e.g. `−$8.61 (v2 −$5.20)`.
-  Rows predating the Fill column count as v1. Trades/Wins/Win rate remain
-  all-time counts (the Fill column on each row carries the per-trade regime
-  for audit).
+ cell; Unicode minus handled), trades = total rows, wins = P&L > 0,
+ win_rate = wins/trades (— when trades == 0).
+- Fill-regime split: the ledger table's Fill column tags each
+ row v1 (0.5c haircut, no fees) or v2 (book-walk VWAP + taker fees). The two
+ regimes are NOT pooled — the Realized P&L cell renders the all-time total
+ with the v2-regime subtotal in parentheses, e.g. `−$8.61 (v2 −$5.20)`.
+ Rows predating the Fill column count as v1. Trades/Wins/Win rate remain
+ all-time counts (the Fill column on each row carries the per-trade regime
+ for audit).
 - Desk X is UNSCORED by charter: its row is never touched.
 - Only the numeric cells (Realized P&L, Trades, Wins, Win rate) are
-  rewritten. Start, Current, Open risk, and the notes column are preserved.
+ rewritten. Start, Current, Open risk, and the notes column are preserved.
 - Open positions (empty P&L cell) count as trades but not as realized.
 - Idempotent: running twice without ledger changes produces no diff.
 
 Usage: python3 bin/recompute_scoreboard.py [--check]
-  --check: exit 0 if the scoreboard already matches, exit 2 with a diff
-           description if it doesn't (for workers to detect drift).
+ --check: exit 0 if the scoreboard already matches, exit 2 with a diff
+ description if it doesn't (for workers to detect drift).
 """
 import re
 import sys
@@ -55,7 +55,7 @@ def fmt_money(v):
 
 
 def fmt_realized(st):
-    # Fill-regime split (2026-10-06): the Realized P&L cell renders the
+    # Fill-regime split: the Realized P&L cell renders the
     # all-time total with the v2-bookwalk subtotal in parentheses. The split
     # is omitted when one regime is absent (pure-v1 legacy, v2 ~ 0; or
     # pure-v2, v2 ~ all-time) — the ledger table's Fill column carries the

@@ -3,12 +3,12 @@
 
 New kill conditions and metric bars are registered through this script, not
 by prose edits. It enforces the two pre-registered requirements from SPEC.md:
-  1. Evaluability gate: --proof must be an executable test demonstrating each
-     clause can both trip and clear. The script RUNS it; non-zero exit ->
-     REFUSED. (The script enforces existence + green; the proof's content —
-     asserting trip AND clear — is the author's job, audited in review.)
-  2. Judgment log: hidden_files/judgment_log.jsonl must contain an entry with
-     bar_id == --bar-id, carrying a confidence value and a mandatory wrong_if.
+ 1. Evaluability gate: --proof must be an executable test demonstrating each
+ clause can both trip and clear. The script RUNS it; non-zero exit ->
+ REFUSED. (The script enforces existence + green; the proof's content —
+ asserting trip AND clear — is the author's job, audited in review.)
+ 2. Judgment log: hidden_files/judgment_log.jsonl must contain an entry with
+ bar_id == --bar-id, carrying a confidence value and a mandatory wrong_if.
 
 Either missing -> print REFUSED with reasons, exit 2, nothing is registered.
 On success the bar record is appended to hidden_files/bar_registry.jsonl.
@@ -54,9 +54,8 @@ _DATE_RE = re.compile(r"\b(20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b")
 
 def wrong_if_dates_ok(entry):
     """A wrong_if naming a date earlier than the entry's own timestamp is a
-    slip (2026-10-06 + 90d was once written 2026-01-04 instead of
-    2027-01-04). ISO dates compare lexicographically. Returns (ok, bad_date).
-    """
+ slip (+ 90d was once written instead of). ISO dates compare lexicographically. Returns (ok, bad_date).
+ """
     ts_day = (entry.get("ts_cdt") or "")[:10]
     for m in _DATE_RE.finditer(entry.get("wrong_if") or ""):
         if m.group(0) < ts_day:

@@ -12,27 +12,27 @@ hallucination is rejected and a 0.31-confidence grounded output passes —
 the gate is structurally blind to the model's internal confidence scores.
 
 Checks (ALL must pass; any failure -> ESCALATE):
-  1. schema      valid JSON object; "claims" is a list of {"claim": str,
-                 "source_spans": [str, ...]}; claim non-empty; spans non-empty.
-                 "confidence" may be present in any form — it is not read.
-  2. spans       every source_spans string is a verbatim substring of the
-                 source and >= 10 chars (reuses bin/verify_spans.verify —
-                 kills fabrication, quote drift, interior deletion).
-  3. qualifiers  epistemic families present in the source (unverified,
-                 single-report, rumor, alleged) are preserved in the joined
-                 claims text (reuses local_summarize.qualifier_gate —
-                 kills epistemic erosion).
-  4. provenance  "provenance" key present and sha-bound to the body
-                 (reuses provenance.verify_json_object — accepts both
-                 tier=local and tier=local_cpu_fallback).
-  5. heartbeat   if a heartbeat path is asserted (--assert-path), it must be
-                 in the closed 7-path vocabulary (guards against invented
-                 telemetry paths).
+ 1. schema valid JSON object; "claims" is a list of {"claim": str,
+ "source_spans": [str, ...]}; claim non-empty; spans non-empty.
+ "confidence" may be present in any form — it is not read.
+ 2. spans every source_spans string is a verbatim substring of the
+ source and >= 10 chars (reuses bin/verify_spans.verify —
+ kills fabrication, quote drift, interior deletion).
+ 3. qualifiers epistemic families present in the source (unverified,
+ single-report, rumor, alleged) are preserved in the joined
+ claims text (reuses local_summarize.qualifier_gate —
+ kills epistemic erosion).
+ 4. provenance "provenance" key present and sha-bound to the body
+ (reuses provenance.verify_json_object — accepts both
+ tier=local and tier=local_cpu_fallback).
+ 5. heartbeat if a heartbeat path is asserted (--assert-path), it must be
+ in the closed 7-path vocabulary (guards against invented
+ telemetry paths).
 
 Exit codes:
-  0  PASS — output usable as local-tier advisory
-  2  ESCALATE — caller reads raw; confidence could neither save nor kill it
-  1  usage / input error (not a gate verdict)
+ 0 PASS — output usable as local-tier advisory
+ 2 ESCALATE — caller reads raw; confidence could neither save nor kill it
+ 1 usage / input error (not a gate verdict)
 
 Honest limit (carried from reform 2): substring existence grounds the SPAN,
 not claim entailment. A verbatim span can still fail to support its claim's
@@ -48,7 +48,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import provenance  # noqa: E402
 import verify_spans  # noqa: E402
-from epistemic import qualifier_gate  # noqa: E402  (bin/epistemic.py, leaf module)
+from epistemic import qualifier_gate  # noqa: E402 (bin/epistemic.py, leaf module)
 
 HEARTBEAT_PATHS = {
     "llm_ok", "llm_transport_failed", "llm_bad_output", "gate_refused",
@@ -57,7 +57,7 @@ HEARTBEAT_PATHS = {
 
 # --- Pinned JSON schemas (canary/pins reform) ---
 # The contracts the local tier's outputs must satisfy. SPAN_CONTRACT_SCHEMA
-# is ENFORCED by check_schema() below (the gate validates against this
+# is ENFORCED by check_schema below (the gate validates against this
 # constant — it is not documentation). TRIAGE_SCHEMA is the documented
 # contract for the triage output shape (digit keys -> ticker arrays, plus
 # the provenance key); the triage script enforces it via its clean-and-filter
@@ -107,11 +107,11 @@ TRIAGE_SCHEMA = {
 def _validate(doc, schema: dict, path: str = "$") -> list:
     """Minimal pure-stdlib JSON-schema-subset validator.
 
-    Supports exactly the keywords used above: type, required, properties,
-    patternProperties, items, minLength, minItems, pattern. Returns a list of
-    violation strings (empty = conforms). Unknown keywords are ignored;
-    unknown properties are allowed.
-    """
+ Supports exactly the keywords used above: type, required, properties,
+ patternProperties, items, minLength, minItems, pattern. Returns a list of
+ violation strings (empty = conforms). Unknown keywords are ignored;
+ unknown properties are allowed.
+ """
     bad = []
     t = schema.get("type")
     if t == "object":
@@ -160,20 +160,20 @@ def _validate(doc, schema: dict, path: str = "$") -> list:
 def check_schema(doc) -> list:
     """Return a list of schema violations (empty = conforms).
 
-    Validates against the pinned SPAN_CONTRACT_SCHEMA — the constant IS the
-    enforcement. "confidence" is deliberately never inspected here.
-    """
+ Validates against the pinned SPAN_CONTRACT_SCHEMA — the constant IS the
+ enforcement. "confidence" is deliberately never inspected here.
+ """
     return _validate(doc, SPAN_CONTRACT_SCHEMA)
 
 
 def gate(source: str, doc: dict, assert_path: str = None) -> tuple:
     """Run the consolidated mechanical checklist.
 
-    Returns (passed: bool, failures: [str]). The decision function reads
-    spans, qualifiers, provenance, and schema — never confidence, never
-    multi-sample agreement (agreement is benched offline as an annotation
-    only; this function takes no samples parameter by design).
-    """
+ Returns (passed: bool, failures: [str]). The decision function reads
+ spans, qualifiers, provenance, and schema — never confidence, never
+ multi-sample agreement (agreement is benched offline as an annotation
+ only; this function takes no samples parameter by design).
+ """
     failures = []
 
     failures.extend(f"schema: {v}" for v in check_schema(doc))

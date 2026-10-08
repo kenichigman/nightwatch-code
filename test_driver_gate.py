@@ -1,10 +1,10 @@
-"""test_driver_gate.py — driver-concentration gate tests (2026-09-26).
+"""test_driver_gate.py — driver-concentration gate tests.
 
-Gabe's flag: 4 of 6 open paper positions shared an Iran/Hormuz macro driver
+The operator's flag: 4 of 6 open paper positions shared an Iran/Hormuz macro driver
 while the correlation gate only caught same-slug event families. The gate:
---driver required on every booking (K3N1-owned taxonomy), max 2 open per
+--driver required on every booking (framework-owned taxonomy), max 2 open per
 driver across M/S/F/Q/C, X shadows exempt (they mirror by design).
-Directives are NOT exempt — the cap is absolute (ruling 2026-09-26);
+Directives are NOT exempt — the cap is absolute;
 they still declare --driver for tagging.
 
 Runs ONLY via run_tests.sh (sandboxed HOME). Script resolved from __file__.
@@ -51,7 +51,7 @@ def open_books(rows):
 
 def test_third_same_driver_rejected_naming_blockers():
     """Cap = 2: the M/S-style mirror pair is allowed; a 3rd pile-on REJECTs
-    (exit 3) and names the blocking receipt_ids. Rejection is logged."""
+ (exit 3) and names the blocking receipt_ids. Rejection is logged."""
     with testutil.isolated_home() as home:
         setup_taxonomy(home)
         r1 = book(home, "F", "test-iran-nuclear-deal-2026", "test-nuclear",
@@ -90,7 +90,7 @@ def test_missing_and_unknown_driver_rejected():
 
 def test_x_shadow_exempt_on_capped_driver():
     """X mirrors by design: a shadow on a driver already at cap is ACCEPTed
-    and inherits the source's driver for audit visibility."""
+ and inherits the source's driver for audit visibility."""
     with testutil.isolated_home() as home:
         setup_taxonomy(home)
         r1 = book(home, "F", "test-iran-nuclear-deal-2026", "test-nuclear",
@@ -113,9 +113,9 @@ def test_x_shadow_exempt_on_capped_driver():
 
 
 def test_directive_blocked_on_full_driver():
-    """The cap is ABSOLUTE (ruling 2026-09-26): a directive on a full driver
-    is REJECTED like any other booking. Directives still declare --driver
-    for tagging — the tag is recorded on accepted rows."""
+    """The cap is ABSOLUTE: a directive on a full driver
+ is REJECTED like any other booking. Directives still declare --driver
+ for tagging — the tag is recorded on accepted rows."""
     with testutil.isolated_home() as home:
         setup_taxonomy(home)
         assert book(home, "F", "test-iran-nuclear-deal-2026", "test-nuclear",

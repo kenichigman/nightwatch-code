@@ -1,123 +1,122 @@
 #!/usr/bin/env python3
 """book_trade.py — the ONLY valid path for paper bookings in Nightwatch.
 
-Gabe's enforcement rule (2026-09-24 review): sizing, EV, caps, and correlation
+The operator's enforcement rule: sizing, EV, caps, and correlation
 clusters are CODE, not charter prose. The worker agent never chooses a dollar
 size — this script computes it from (side, price, p). A booking without a
 script receipt is invalid.
 
 Subcommands:
-  book    --desk M|S|F|Q|C --market SLUG --side yes|no --price CENTS --p PYES
-          --family FAMILY --driver DRIVER --loser LOSER --sen SEN
-          [--directive] [--note TEXT]
-          [--proposer ID] [--size-suggest USD]   (proposer contract: advisory only)
-          p = P(Yes resolves true), 0-1 exclusive (same convention as kelly.py)
-          DRIVER = macro driver from hidden_files/driver_taxonomy.json
-          (required; directives declare it for tagging but are cap-exempt)
-          LOSER = named source of the mispricing (required, D-003 mikiri)
-          SEN = ken_no_sen | tai_no_sen | tai_tai_no_sen (required, D-003)
-  shadow  --market SLUG --side yes|no --price CENTS --shadow-of RECEIPT
-          --attempted DOLLARS --fill DOLLARS [--note TEXT]   (X only)
-  exit    --receipt ID --exit-price CENTS [--note TEXT]
-  settle  --market SLUG --outcome YES|NO [--pnl USD] [--evidence TEXT]
-          [--resolved-cdt "YYYY-MM-DD HH:MM"] [--note TEXT]
-          Close ALL open receipts on a resolved market (primary settlement
-          path): appends a `settle` receipt per open book row, records the
-          immutable settled.json entry (with `yes_won` so brier.py resolves),
-  resolve-sweep [--dry-run]
-          Phase 1.2 resolution detection: check every open position's market
-          against the venue; auto-settle RESOLVED markets through the settle
-          path above, queue AMBIGUOUS ones for human review (never
-          auto-settled). Only closes exposure — ungated like settle.
-          files p-bearing rows into brier_shadow.json pending, and removes the
-          position from worker_state.json / WATCHLIST.json position fields.
-          Re-settling a settled market is refused (immutability).
-  audit   reconcile ledger vs worker_state.json positions
-  ledger  dump open positions
-  bootstrap  seed ledger from current worker_state.json (one-time)
-  kill    engage the kill switch (--reason TEXT): book/shadow/bootstrap
-          refuse with exit code 4 until `resume` clears it. `exit` stays live
-          (kill = no new risk, not no writes — a kill switch must never hold
-          a bad position open)
-  resume  clear the kill switch, re-opening the booking path
+ book --desk M|S|F|Q|C --market SLUG --side yes|no --price CENTS --p PYES
+ --family FAMILY --driver DRIVER --loser LOSER --sen SEN
+ [--directive] [--note TEXT]
+ [--proposer ID] [--size-suggest USD] (proposer contract: advisory only)
+ p = P(Yes resolves true), 0-1 exclusive (same convention as kelly.py)
+ DRIVER = macro driver from hidden_files/driver_taxonomy.json
+ (required; directives declare it for tagging but are cap-exempt)
+ LOSER = named source of the mispricing (required, D-003 mikiri)
+ SEN = ken_no_sen | tai_no_sen | tai_tai_no_sen (required, D-003)
+ shadow --market SLUG --side yes|no --price CENTS --shadow-of RECEIPT
+ --attempted DOLLARS --fill DOLLARS [--note TEXT] (X only)
+ exit --receipt ID --exit-price CENTS [--note TEXT]
+ settle --market SLUG --outcome YES|NO [--pnl USD] [--evidence TEXT]
+ [--resolved-cdt "YYYY-MM-DD HH:MM"] [--note TEXT]
+ Close ALL open receipts on a resolved market (primary settlement
+ path): appends a `settle` receipt per open book row, records the
+ immutable settled.json entry (with `yes_won` so brier.py resolves),
+ resolve-sweep [--dry-run]
+ Phase 1.2 resolution detection: check every open position's market
+ against the venue; auto-settle RESOLVED markets through the settle
+ path above, queue AMBIGUOUS ones for human review (never
+ auto-settled). Only closes exposure — ungated like settle.
+ files p-bearing rows into brier_shadow.json pending, and removes the
+ position from worker_state.json / WATCHLIST.json position fields.
+ Re-settling a settled market is refused (immutability).
+ audit reconcile ledger vs worker_state.json positions
+ ledger dump open positions
+ bootstrap seed ledger from current worker_state.json (one-time)
+ kill engage the kill switch (--reason TEXT): book/shadow/bootstrap
+ refuse with exit code 4 until `resume` clears it. `exit` stays live
+ (kill = no new risk, not no writes — a kill switch must never hold
+ a bad position open)
+ resume clear the kill switch, re-opening the booking path
 
-Kill switch (code-enforced, 2026-09-24 ~22:45 CDT, Gabe's review;
-semantic refined ~22:55 CDT):
-  The check lives HERE, not in coordinator prose — this script is the single
-  choke point every booking passes through, so the kill inherits the same
-  guarantee the sizing fix earned. When hidden_files/kill.switch exists,
-  book/shadow/bootstrap hard-exit BEFORE any write (exit code 4, distinct
-  from REJECT=3). `exit` is NOT blocked: kill means no NEW risk — exits only
-  close positions and book mechanical stops, they cannot open exposure.
-  Read-only commands (audit, ledger) still work — that is how you verify
-  state after a kill. Engage/clear via the kill/resume subcommands (the flag
-  file carries timestamp + reason for the audit trail).
-  Note: the scheduler's own disable is between-cycles only — no
-  cancel-running-run primitive exists in the cron tools, so a cycle already
-  in flight runs to completion (~10-20 min). That is a permanent accepted
-  limitation; this script's kill is the mid-cycle backstop.
+Kill switch (code-enforced; kill switch fires a stop condition — see below):
+ The check lives HERE, not in coordinator prose — this script is the single
+ choke point every booking passes through, so the kill inherits the same
+ guarantee the sizing fix earned. When hidden_files/kill.switch exists,
+ book/shadow/bootstrap hard-exit BEFORE any write (exit code 4, distinct
+ from REJECT=3). `exit` is NOT blocked: kill means no NEW risk — exits only
+ close positions and book mechanical stops, they cannot open exposure.
+ Read-only commands (audit, ledger) still work — that is how you verify
+ state after a kill. Engage/clear via the kill/resume subcommands (the flag
+ file carries timestamp + reason for the audit trail).
+ Note: the scheduler's own disable is between-cycles only — no
+ cancel-running-run primitive exists in the cron tools, so a cycle already
+ in flight runs to completion (~10-20 min). That is a permanent accepted
+ limitation; this script's kill is the mid-cycle backstop.
 
-Phase 1.1 data-health gate (2026-09-26, ingestion backlog): the price-watch
-  hook's heartbeat (~/hooks/state/nightwatch-status.json: last_tick,
-  fetch_ok/fetch_fail) is wired into this SAME choke point — book/shadow/
-  bootstrap hard-exit (exit 4) when the heartbeat is missing, malformed,
-  older than DATA_HEALTH_TTL_S (180s = two missed 90s polls; the threshold
-  maps to the physical sensor limit per the 2026-09-26 TTL amendment), or
-  when a whole tick fetched nothing (transport dark). `exit` and `settle`
-  stay live: the gate kills new risk, never the ability to flatten.
-  resolve-sweep (Phase 1.2) only closes exposure, so it is ungated like
-  settle.
+Phase 1.1 data-health gate (ingestion backlog): the price-watch
+ hook's heartbeat (~/hooks/state/nightwatch-status.json: last_tick,
+ fetch_ok/fetch_fail) is wired into this SAME choke point — book/shadow/
+ bootstrap hard-exit (exit 4) when the heartbeat is missing, malformed,
+ older than DATA_HEALTH_TTL_S (180s = two missed 90s polls; the threshold
+ maps to the physical sensor limit per the TTL amendment), or
+ when a whole tick fetched nothing (transport dark). `exit` and `settle`
+ stay live: the gate kills new risk, never the ability to flatten.
+ resolve-sweep (Phase 1.2) only closes exposure, so it is ungated like
+ settle.
 
 Hard gates (code, not prose):
-  - Mikiri EV gate (D-003, 2026-09-26, Gabe's directive): the static
-    p-price band is REPLACED by the confidence-bounded form
-    (win_p - k*sigma_desk) - price_c > 0.05, else REJECT. sigma_desk is the
-    desk's calibration uncertainty from resolved history
-    (brier_shadow.json scored rows, 21d half-life decay). A thesis from a
-    poorly calibrated desk gets its margin compressed by the k*sigma penalty
-    and fails where the static gate would have passed. Kelly still sizes the
-    STATED win_p once the gate clears — the gate does the refusing (mikiri
-    is selection), Kelly does the sizing. Cold start: a desk with
-    eff_n < MIKIRI_MIN_EFF_N has no resolved history (unreadable) — the
-    static gate applies but the receipt is tagged mikiri_exempt, and the
-    exemption dies permanently once eff_n reaches the threshold. Skipped for
-    --directive (Gabe's direct orders are not EV-gated).
-  - Size BY CONSTRUCTION: quarter-Kelly from (side, price, p, bankroll, cap),
-    rounded DOWN to the nearest $0.05. Below $0.10 -> REJECT (dust).
-    r <= 1.0 holds structurally: the agent never passes a size.
-    (Deviation from F charter "nearest $0.05": nearest can breach r<=1.0;
-    floor cannot. Gabe's r<=1.0 rule wins.)
-  - Caps: <8 open positions per desk; daily new-trade cap per desk
-    (M/S/Q/C: 3, F: 5). Directives count toward the open cap, not daily-new.
-  - Correlation: ONE open position per event family ACROSS ALL DESKS.
-    Family = mechanical derivation from the market slug OR the declared
-    --family; a match on either blocks. X shadows exempt (they mirror).
-  - Driver concentration: max 2 open positions per macro driver ACROSS ALL
-    DESKS (M/S/F/Q/C). --driver is REQUIRED on every booking and must be a
-    key in hidden_files/driver_taxonomy.json (K3N1-owned vocabulary);
-    missing/unknown driver REJECTs. The cap is ABSOLUTE (ruling 2026-09-26):
-    directives declare --driver for tagging but are NOT exempt — a directive
-    on a full driver is rejected like any other booking. X shadows exempt
-    (they mirror by design). Grandfathered:
-    the 3 iran-geopolitics positions open at gate launch (bk-bootstrap-06,
-    bk-bootstrap-07, bk-bootstrap-08) are not retroactively killed; the cap
-    binds NEW bookings, and their backfilled driver tags count toward it —
-    a 4th Iran-driver pile-on is blocked from here on.
-  - Real-money nomination: --nominate-real requires --r-rating HARD|SOFT|MISS
-    and is recorded. (Structural backstop unchanged: the worker never holds
-    the key; no paper-book path can reach real money.)
-  - Settlement immutability: a market already in settled.json cannot be
-    settled again (refused, not overwritten). `settle` writes `yes_won` into
-    the settled.json entry — the field brier.py's outcome_for() actually
-    reads — so pending shadow rows and PAPER.md ledger rows grade on the
-    next brier.py run instead of silently starving.
-  - Terminal closure (2026-09-26, Gabe's ruling): `exit` and `settle` mutate
-    the book row itself to closed (status, close action, timestamp, final
-    realized P&L) — the ledger reads absolute reality at rest; settled.json
-    is no longer an exclusion filter hiding technically-open rows. Ghost
-    state: if a market is already in settled.json but ledger rows remain
-    open (the old filter hid them), `settle` completes the ledger-side
-    closure using the recorded outcome — settled.json is never rewritten.
+ - Mikiri EV gate (D-003, the operator's directive): the static
+ p-price band is REPLACED by the confidence-bounded form
+ (win_p - k*sigma_desk) - price_c > 0.05, else REJECT. sigma_desk is the
+ desk's calibration uncertainty from resolved history
+ (brier_shadow.json scored rows, 21d half-life decay). A thesis from a
+ poorly calibrated desk gets its margin compressed by the k*sigma penalty
+ and fails where the static gate would have passed. Kelly still sizes the
+ STATED win_p once the gate clears — the gate does the refusing (mikiri
+ is selection), Kelly does the sizing. Cold start: a desk with
+ eff_n < MIKIRI_MIN_EFF_N has no resolved history (unreadable) — the
+ static gate applies but the receipt is tagged mikiri_exempt, and the
+ exemption dies permanently once eff_n reaches the threshold. Skipped for
+ --directive (the operator's direct orders are not EV-gated).
+ - Size BY CONSTRUCTION: quarter-Kelly from (side, price, p, bankroll, cap),
+ rounded DOWN to the nearest $0.05. Below $0.10 -> REJECT (dust).
+ r <= 1.0 holds structurally: the agent never passes a size.
+ (Deviation from F charter "nearest $0.05": nearest can breach r<=1.0;
+ floor cannot. The operator's r<=1.0 rule wins.)
+ - Caps: <8 open positions per desk; daily new-trade cap per desk
+ (M/S/Q/C: 3, F: 5). Directives count toward the open cap, not daily-new.
+ - Correlation: ONE open position per event family ACROSS ALL DESKS.
+ Family = mechanical derivation from the market slug OR the declared
+ --family; a match on either blocks. X shadows exempt (they mirror).
+ - Driver concentration: max 2 open positions per macro driver ACROSS ALL
+ DESKS (M/S/F/Q/C). --driver is REQUIRED on every booking and must be a
+ key in hidden_files/driver_taxonomy.json (framework-owned vocabulary);
+ missing/unknown driver REJECTs. The cap is ABSOLUTE:
+ directives declare --driver for tagging but are NOT exempt — a directive
+ on a full driver is rejected like any other booking. X shadows exempt
+ (they mirror by design). Grandfathered:
+ the 3 iran-geopolitics positions open at gate launch (bk-bootstrap-06,
+ bk-bootstrap-07, bk-bootstrap-08) are not retroactively killed; the cap
+ binds NEW bookings, and their backfilled driver tags count toward it —
+ a 4th Iran-driver pile-on is blocked from here on.
+ - Real-money nomination: --nominate-real requires --r-rating HARD|SOFT|MISS
+ and is recorded. (Structural backstop unchanged: the worker never holds
+ the key; no paper-book path can reach real money.)
+ - Settlement immutability: a market already in settled.json cannot be
+ settled again (refused, not overwritten). `settle` writes `yes_won` into
+ the settled.json entry — the field brier.py's outcome_for actually
+ reads — so pending shadow rows and PAPER.md ledger rows grade on the
+ next brier.py run instead of silently starving.
+ - Terminal closure (the operator's ruling): `exit` and `settle` mutate
+ the book row itself to closed (status, close action, timestamp, final
+ realized P&L) — the ledger reads absolute reality at rest; settled.json
+ is no longer an exclusion filter hiding technically-open rows. Ghost
+ state: if a market is already in settled.json but ledger rows remain
+ open (the old filter hid them), `settle` completes the ledger-side
+ closure using the recorded outcome — settled.json is never rewritten.
 """
 import argparse
 import hashlib
@@ -152,7 +151,7 @@ except ImportError:  # pragma: no cover — deployed alongside; fail loudly belo
 HOOK_STATUS = os.path.expanduser("~/hooks/state/nightwatch-status.json")
 # Phase 1.1: two missed 90s poll ticks = dark. One missed tick is tolerated
 # (transient); the threshold maps to the sensor's physical limit, not to a
-# rhetorical bound (2026-09-26 TTL amendment).
+# rhetorical bound (TTL amendment).
 DATA_HEALTH_TTL_S = 180
 RESOLVE_REVIEW = os.path.join(ROOT, "hidden_files", "resolution_review.jsonl")
 WATCHLIST_PATH = os.path.join(ROOT, "desks", "WATCHLIST.json")
@@ -160,7 +159,7 @@ REJECTIONS = os.path.join(ROOT, "hidden_files", "rejections.jsonl")
 SETTLED_PATH = os.path.join(ROOT, "hidden_files", "settled.json")
 DRIVER_TAXONOMY_PATH = os.path.join(ROOT, "hidden_files", "driver_taxonomy.json")
 DRIVER_CAP = 2  # max open positions per macro driver across M/S/F/Q/C
-# D-001 K1-bis interim regime (2026-09-27, R HUNT #2 adjudicated): a desk that
+# D-001 K1-bis interim regime (R HUNT #2 adjudicated): a desk that
 # fires K1-bis (majority of trailing-30d bookings mikiri-exempt) is confined
 # here until its eff_n reaches MIKIRI_MIN_EFF_N. Written by audit_doctrines.py
 # on a new filing; enforced + self-clearing in cmd_book below.
@@ -170,7 +169,7 @@ FUNNEL_CACHE = os.path.join(ROOT, "hidden_files", "funnel_cache.json")
 DECISION_FEATURES = os.path.join(ROOT, "hidden_files", "decision_features.jsonl")
 WATCHLIST_PATH = os.path.join(ROOT, "desks", "WATCHLIST.json")
 STATUS_PATH = os.path.join(ROOT, "desks", "STATUS.md")
-# Kill semantic (decided 2026-09-24 ~22:55 CDT, Gabe's review): NO NEW RISK.
+# Kill semantic (operator's ruling): NO NEW RISK.
 # book/shadow/bootstrap are blocked while the flag exists. `exit` is
 # deliberately NOT blocked — a kill switch must never be the thing holding a
 # bad position open. Exits only reduce risk (close positions, book stops);
@@ -179,7 +178,7 @@ STATUS_PATH = os.path.join(ROOT, "desks", "STATUS.md")
 # a safety mechanism holds the bag it was meant to protect.
 
 ERROR_BAND = 0.05
-# Mikiri gate parameters (D-003, 2026-09-26, Gabe's directive).
+# Mikiri gate parameters (D-003, the operator's directive).
 MIKIRI_K = 1.0          # z-multiplier on the calibration penalty.
                         # STARTING GUESS, NEVER TUNED — a settled parameter
                         # must be derived from evidence, not hardcoded
@@ -202,16 +201,16 @@ DESKS = {
     "F": {"bankroll": 10.0, "cap": 1.0, "fraction": 0.25, "max_open": 8, "max_new_day": 5},
     "Q": {"bankroll": 10.0, "cap": 1.0, "fraction": 0.25, "max_open": 8, "max_new_day": 3},
     "C": {"bankroll": 10.0, "cap": 1.0, "fraction": 0.25, "max_open": 8, "max_new_day": 3},
-    # X is the exploration account (rechartered 2026-10-05 per Gabe's stated
-    # original intention; spend directive 2026-10-05 ~15:35 CDT): originates
+    # X is the exploration account (rechartered per the operator's stated
+    # original intention; spend directive): originates
     # freely, no EV gate. Wider caps fit the $1M paper bankroll, the
     # exploration mandate, and the spend directive (mass data).
     "X": {"bankroll": 1000000.0, "cap": 20000.0, "fraction": 1.0,
           "max_open": 100, "max_new_day": 50},
 }
 
-# X exploration account: breadth-first target clip (2026-10-06, Gabe's
-# "breadth first" decision on N1K3's ordered plan). Small depth-capped clips
+# X exploration account: breadth-first target clip (the operator's
+# "breadth first" decision on the reviewer's ordered plan). Small depth-capped clips
 # across many markets — resolutions per week are the scarce input, and the
 # $20k flat answered neither "what survives at size?" (the old haircut/cap
 # didn't measure depth) nor "what works?" (a few big clips resolve slowly).
@@ -235,7 +234,7 @@ def now_cdt():
 
 def derive_family(slug):
     """Mechanical event-family from the market slug. The agent cannot game
-    this — it comes from the slug, not from a declared tag."""
+ this — it comes from the slug, not from a declared tag."""
     s = slug.lower()
     for pre in VENUE_PREFIXES:
         if s.startswith(pre):
@@ -269,13 +268,13 @@ def load_ledger():
 def ws_entry_dollars(p):
     """worker_state position entry in dollars, unit-aware.
 
-    Legacy keys carry `entry` (dollars); worker-written keys carry
-    `entry_c` (cents). Current skill-mandated list-form positions carry
-    side-native `entry_yes_c`/`entry_no_c` (cents). Returns None when
-    none is recorded. (2026-09-27: the audit fallback read only `entry`,
-    so every `entry_c`-keyed position fell through to a bare desk+side
-    match and manufactured AMBIGUOUS claims — e.g. bk-20260927-021
-    claimed by 4 unrelated F/no keys.)"""
+ Legacy keys carry `entry` (dollars); worker-written keys carry
+ `entry_c` (cents). Current skill-mandated list-form positions carry
+ side-native `entry_yes_c`/`entry_no_c` (cents). Returns None when
+ none is recorded. (: the audit fallback read only `entry`,
+ so every `entry_c`-keyed position fell through to a bare desk+side
+ match and manufactured AMBIGUOUS claims — e.g. bk-20260927-021
+ claimed by 4 unrelated F/no keys.)"""
     e = p.get("entry")
     if e is not None:
         return e
@@ -288,7 +287,7 @@ def ws_entry_dollars(p):
 
 def ws_entry_close_enough(p, price_c):
     """Legacy-fallback proximity check: True when the ws position's recorded
-    entry is absent (weak match) or within 2c of the ledger price."""
+ entry is absent (weak match) or within 2c of the ledger price."""
     entry = ws_entry_dollars(p)
     return entry is None or abs(entry - price_c / 100.0) < 0.02
 
@@ -296,14 +295,14 @@ def ws_entry_close_enough(p, price_c):
 def ws_entry_side_dollars(p, side):
     """worker_state entry on the BOOKED side, in dollars, side-aware.
 
-    The ledger's price_c is the booked side's price. List-form ws
-    positions record side-native entry_yes_c/entry_no_c, so compare
-    like-for-like: side No uses entry_no_c (else 1 - entry_yes_c);
-    side Yes uses entry_yes_c (else 1 - entry_no_c). Falls back to the
-    side-agnostic ws_entry_dollars for legacy entry/entry_c rows.
-    Returns None when no entry data exists. (2026-09-27 22:55 CDT:
-    without this, bootstrap No rows booked at 99.0c never matched their
-    ws rows carrying entry_yes_c=1.5, producing false ORPHANs.)"""
+ The ledger's price_c is the booked side's price. List-form ws
+ positions record side-native entry_yes_c/entry_no_c, so compare
+ like-for-like: side No uses entry_no_c (else 1 - entry_yes_c);
+ side Yes uses entry_yes_c (else 1 - entry_no_c). Falls back to the
+ side-agnostic ws_entry_dollars for legacy entry/entry_c rows.
+ Returns None when no entry data exists. (:
+ without this, bootstrap No rows booked at 99.0c never matched their
+ ws rows carrying entry_yes_c=1.5, producing false ORPHANs.)"""
     s = (side or "").lower()
     if s == "no":
         en = p.get("entry_no_c")
@@ -324,9 +323,9 @@ def ws_entry_side_dollars(p, side):
 
 def ws_entry_side_close_enough(p, side, price_c):
     """Side-aware variant of ws_entry_close_enough: same 2c band, but the
-    ws entry is taken on the booked side. True when no entry data exists
-    (weak match), False on side-ambiguous legacy rows only via the same
-    weak-match rule."""
+ ws entry is taken on the booked side. True when no entry data exists
+ (weak match), False on side-ambiguous legacy rows only via the same
+ weak-match rule."""
     entry = ws_entry_side_dollars(p, side)
     return entry is None or abs(entry - price_c / 100.0) < 0.02
 
@@ -343,7 +342,7 @@ def load_interim_regime():
 
 def set_interim_regime(desk, regime, reason):
     """Confine a desk to an interim regime. Idempotent: the first firing wins
-    and keeps its original `since` — a re-fire must not rewrite the clock."""
+ and keeps its original `since` — a re-fire must not rewrite the clock."""
     cur = load_interim_regime()
     if desk in cur:
         return False
@@ -371,9 +370,9 @@ def clear_interim_regime(desk, reason):
 
 
 def load_drivers():
-    """Controlled driver vocabulary (K3N1-owned). Returns the key->meta dict,
-    or None if the taxonomy is unreadable — the book path FAILS CLOSED in
-    that case: no new risk without a verifiable driver."""
+    """Controlled driver vocabulary (framework-owned). Returns the key->meta dict,
+ or None if the taxonomy is unreadable — the book path FAILS CLOSED in
+ that case: no new risk without a verifiable driver."""
     try:
         doc = json.load(open(DRIVER_TAXONOMY_PATH))
         drivers = doc.get("drivers") or {}
@@ -391,20 +390,20 @@ def append(entry):
 def ledger_append_and_close(new_entries, closures, patches=None):
     """Atomic ledger write: append new_entries AND terminally close book rows.
 
-    2026-09-26 (Gabe's ruling #2 — terminal closure): a book row whose risk is
-    gone must read closed AT REST. closures maps receipt_id -> fields merged
-    into the action==book row (plus status="closed"). The exit/settle receipts
-    in new_entries remain the append-only audit trail; the row is the state.
+ (the operator's ruling #2 — terminal closure): a book row whose risk is
+ gone must read closed AT REST. closures maps receipt_id -> fields merged
+ into the action==book row (plus status="closed"). The exit/settle receipts
+ in new_entries remain the append-only audit trail; the row is the state.
 
-    patches (optional) maps receipt_id -> fields merged into the book row
-    WITHOUT changing its status — for reconciliation metadata (venue, size
-    corrections) that must not terminally close a live row. Added 2026-09-26
-    when the PAPER.md backfill needed exactly this distinction.
+ patches (optional) maps receipt_id -> fields merged into the book row
+ WITHOUT changing its status — for reconciliation metadata (venue, size
+ corrections) that must not terminally close a live row. Added 
+ when the PAPER.md backfill needed exactly this distinction.
 
-    Temp-file + os.replace keeps the write atomic — a crash cannot leave a
-    half-written ledger, and re-running the closer completes the missing
-    pieces idempotently (already-closed rows are simply re-closed).
-    """
+ Temp-file + os.replace keeps the write atomic — a crash cannot leave a
+ half-written ledger, and re-running the closer completes the missing
+ pieces idempotently (already-closed rows are simply re-closed).
+ """
     patches = patches or {}
     out = []
     if os.path.isfile(LEDGER):
@@ -442,7 +441,7 @@ def settled_markets():
 def open_positions(entries):
     # A receipt is closed by an `exit` OR a `settle` action (the settle
     # subcommand is the primary settlement path), or by its own status field
-    # reading "closed" (terminal closure, 2026-09-26, Gabe's ruling #2).
+    # reading "closed" (terminal closure, the operator's ruling #2).
     #
     # The old settled.json exclusion backstop is REMOVED by that same ruling:
     # it hid technically-open rows behind a sidecar file and manufactured
@@ -467,17 +466,17 @@ def next_receipt(entries):
 def desk_calibration(desk):
     """Return (eff_n, sigma_fn) for the mikiri gate.
 
-    Reads scored (p, outcome) rows from brier_shadow.json — the designed
-    calibration store (SPEC.md calibration policy). eff_n is the 21-day
-    half-life decay-weighted resolved count. sigma_fn(p) returns
-    sqrt(p*(1-p)/eff_n): the binomial standard error of the desk's track
-    record at the thesis p — how much the desk's p-estimates can be trusted.
+ Reads scored (p, outcome) rows from brier_shadow.json — the designed
+ calibration store (SPEC.md calibration policy). eff_n is the 21-day
+ half-life decay-weighted resolved count. sigma_fn(p) returns
+ sqrt(p*(1-p)/eff_n): the binomial standard error of the desk's track
+ record at the thesis p — how much the desk's p-estimates can be trusted.
 
-    Returns (eff_n, None) when eff_n < MIKIRI_MIN_EFF_N: the desk is
-    unreadable and the gate fails closed (cold-start exemption aside).
-    Scored rows without a resolved timestamp weight 1.0 (documented
-    fallback — the store should carry resolved_cdt; see bin/brier.py).
-    """
+ Returns (eff_n, None) when eff_n < MIKIRI_MIN_EFF_N: the desk is
+ unreadable and the gate fails closed (cold-start exemption aside).
+ Scored rows without a resolved timestamp weight 1.0 (documented
+ fallback — the store should carry resolved_cdt; see bin/brier.py).
+ """
     doc = load_json_doc(BRIER_SHADOW, {"pending": [], "scored": []})
     now = now_cdt()
     eff_n = 0.0
@@ -507,12 +506,12 @@ def desk_calibration(desk):
 def kelly_size(side, price_c, p_yes, bankroll, cap, fraction, sigma=None):
     """Returns (size_usd, margin_pts, win_p) or (None, margin_pts, win_p) on gate fail.
 
-    Mikiri gate (D-003): the refusal bar is the confidence-bounded margin
-    (win_p - k*sigma) - price_c > ERROR_BAND. sigma=None means the desk is
-    unreadable (cold start) — the caller applies the static gate and tags the
-    receipt mikiri_exempt. Kelly sizes the STATED win_p: the gate refuses,
-    sizing sizes. margin_pts is reported in points for the rejection log.
-    """
+ Mikiri gate (D-003): the refusal bar is the confidence-bounded margin
+ (win_p - k*sigma) - price_c > ERROR_BAND. sigma=None means the desk is
+ unreadable (cold start) — the caller applies the static gate and tags the
+ receipt mikiri_exempt. Kelly sizes the STATED win_p: the gate refuses,
+ sizing sizes. margin_pts is reported in points for the rejection log.
+ """
     c = price_c / 100.0
     win_p = p_yes if side == "yes" else 1.0 - p_yes
     penalty = MIKIRI_K * sigma if sigma else 0.0
@@ -526,9 +525,9 @@ def kelly_size(side, price_c, p_yes, bankroll, cap, fraction, sigma=None):
     if cap is not None and size > cap:
         size = cap
     # Floor to nickel in EXACT integer cents: r<=1.0 by construction, and the
-    # floored size never exceeds the raw Kelly size. (2026-09-28: the old
+    # floored size never exceeds the raw Kelly size. (: the old
     # `int(size // 0.05)` floored $1.00 to $0.95 — 1.0 // 0.05 is 19.0 in
-    # binary floating point. 2026-09-28 repair #2: the interim
+    # binary floating point. repair #2: the interim
     # `int(round(size * 100))` could round UP half a cent before the nickel
     # floor — raw $1.046 became $1.05 (above raw) and raw $0.096 became $0.10
     # (sneaking past the $0.10 dust line). The +1e-6 guards binary
@@ -575,11 +574,11 @@ def _log_provenance_block(cmd, str_fields):
 def doctrine_tripped():
     """Return tripped proposal ids if a doctrine trip is active, else None.
 
-    Written ONLY by bin/trip_doctrines.py on kill-class proposals for the
-    risk-path doctrines (D-001/D-003/D-004). Cleared ONLY by K3N1 or Gabe
-    after adjudication — cmd_resume deliberately does NOT touch this file
-    (the worker must never clear its own trip).
-    """
+ Written ONLY by bin/trip_doctrines.py on kill-class proposals for the
+ risk-path doctrines (D-001/D-003/D-004). Cleared ONLY by the framework or the operator
+ after adjudication — cmd_resume deliberately does NOT touch this file
+ (the worker must never clear its own trip).
+ """
     try:
         with open(DOCTRINE_TRIP) as f:
             ids = [line.split()[0] for line in f if line.strip()]
@@ -591,12 +590,12 @@ def doctrine_tripped():
 def data_health():
     """Phase 1.1: wire the price-watch hook's heartbeat into the booking halt.
 
-    Returns None when the data plane is healthy, else a reason string.
-    Fail-closed: a missing, malformed, future-dated, or stale heartbeat, or
-    a tick in which every fetch failed (transport dark), halts NEW risk.
-    Checked only on the book/shadow/bootstrap path in main() — `exit` and
-    `settle` stay live by design (flatten, don't freeze).
-    """
+ Returns None when the data plane is healthy, else a reason string.
+ Fail-closed: a missing, malformed, future-dated, or stale heartbeat, or
+ a tick in which every fetch failed (transport dark), halts NEW risk.
+ Checked only on the book/shadow/bootstrap path in main — `exit` and
+ `settle` stay live by design (flatten, don't freeze).
+ """
     try:
         with open(HOOK_STATUS) as f:
             st = json.load(f)
@@ -640,23 +639,23 @@ def cmd_resume(_a):
     return 0
 
 
-# Cents/dollars ambiguity is impossible by construction (2026-09-28, Gabe's
-# directive; hardened 2026-09-28 repair #2): every price entering the booking
+# Cents/dollars ambiguity is impossible by construction (the operator's
+# directive; hardened repair #2): every price entering the booking
 # math passes through parse_price_cents (the single choke point — the unit
 # is decided here, not in prose), and check_price_units cross-checks the
 # unit against the poller quote at booking time. The construction:
-#   - direct match (2c tolerance for quote staleness) -> unambiguous cents
-#   - 100x-low whose x100 matches the quote -> the dollars-passing error,
-#     rejected ALWAYS (the smoking gun; no override — if you truly want a
-#     limit 100x below quote, that path does not exist yet)
-#   - BOTH readings match (low-price markets: 0.05 against a 5c quote reads
-#     as 0.05c or $0.05) -> genuinely ambiguous, rejected unless the
-#     operator explicitly asserts cents with --confirm-cents
-#   - NO poller quote (off-watchlist / dark feed) -> units unverifiable,
-#     rejected unless --confirm-cents. New risk is never booked blind.
-#     (Exits keep fail-open on a dark feed — loss-capping must never be
-#     blocked; see cmd_exit.)
-#   - neither reading matches -> a limit price away from quote, passes
+# - direct match (2c tolerance for quote staleness) -> unambiguous cents
+# - 100x-low whose x100 matches the quote -> the dollars-passing error,
+# rejected ALWAYS (the smoking gun; no override — if you truly want a
+# limit 100x below quote, that path does not exist yet)
+# - BOTH readings match (low-price markets: 0.05 against a 5c quote reads
+# as 0.05c or $0.05) -> genuinely ambiguous, rejected unless the
+# operator explicitly asserts cents with --confirm-cents
+# - NO poller quote (off-watchlist / dark feed) -> units unverifiable,
+# rejected unless --confirm-cents. New risk is never booked blind.
+# (Exits keep fail-open on a dark feed — loss-capping must never be
+# blocked; see cmd_exit.)
+# - neither reading matches -> a limit price away from quote, passes
 # Fractional cents (87.5) and sub-cent prices (0.8) are legitimate and pass
 # — the tripwire only fires on the confusion/ambiguity patterns, so real
 # longshot prices are never flagged.
@@ -667,10 +666,10 @@ UNIT_CONFUSION_TOL_C = 10.0  # cents; the 100x error is unmistakable inside this
 def parse_price_cents(raw, field="--price"):
     """The ONLY valid entry point for a price into the booking math.
 
-    The CLI contract is cents; this converts raw input to the float-cents
-    the ledger stores. Anything outside (0, 100) is refused here with the
-    unit named — never silently interpreted.
-    """
+ The CLI contract is cents; this converts raw input to the float-cents
+ the ledger stores. Anything outside (0, 100) is refused here with the
+ unit named — never silently interpreted.
+ """
     try:
         p = float(raw)
     except (TypeError, ValueError):
@@ -686,13 +685,13 @@ def check_price_units(price_c, market_slug, confirmed=False,
                       allow_unverified=False):
     """Dollars-vs-cents tripwire at booking time.
 
-    Returns an error string (caller fails) or None. See the construction
-    comment above UNIT_DIRECT_TOL_C. `confirmed` (--confirm-cents) is the
-    operator's explicit assertion "this price is in cents": it clears the
-    no-quote and ambiguity rejections, never the 100x-confusion smoking gun.
-    `allow_unverified` keeps the exit path fail-open on a dark feed —
-    loss-capping is never blocked by missing telemetry (cmd_exit only).
-    """
+ Returns an error string (caller fails) or None. See the construction
+ comment above UNIT_DIRECT_TOL_C. `confirmed` (--confirm-cents) is the
+ operator's explicit assertion "this price is in cents": it clears the
+ no-quote and ambiguity rejections, never the 100x-confusion smoking gun.
+ `allow_unverified` keeps the exit path fail-open on a dark feed —
+ loss-capping is never blocked by missing telemetry (cmd_exit only).
+ """
     cached = poller_price_cents(market_slug)
     if cached is None:
         if confirmed or allow_unverified:
@@ -725,7 +724,7 @@ def cmd_book(a):
     rctx = {"action": "book", "desk": a.desk, "market": a.market,
             "proposer_id": getattr(a, "proposer", "") or ""}
 
-    # Cents/dollars by construction (2026-09-28, hardened repair #2): the
+    # Cents/dollars by construction (hardened repair #2): the
     # single choke point parse_price_cents decides the unit; check_price_units
     # trips the 100x dollars-passing error, the low-price ambiguity case, and
     # the no-quote case against the poller quote. (The old inline
@@ -742,23 +741,23 @@ def cmd_book(a):
     if unit_err:
         return fail(unit_err, rctx)
 
-    # Phase 1.2 (2026-09-26): solvable-universe filter at booking time. A
+    # Phase 1.2: solvable-universe filter at booking time. A
     # settled market is never a candidate — neither the optimizer nor this
-    # path may solve on ghosts. (open_positions() already excludes settled
+    # path may solve on ghosts. (open_positions already excludes settled
     # markets from exposure counts; this closes the booking door itself.)
     if a.market in settled_markets():
         return fail(f"{a.market} is settled (settled.json) — removed from the "
                     "solvable universe, booking refused", rctx)
 
-    # Driver declaration (2026-09-26, Gabe's concentration flag): --driver is
-    # REQUIRED and must be a key in the K3N1-owned taxonomy. Missing/unknown
+    # Driver declaration (the operator's concentration flag): --driver is
+    # REQUIRED and must be a key in the framework-owned taxonomy. Missing/unknown
     # driver or an unreadable taxonomy REJECTs — the book path fails closed
     # rather than booking blind. Directives must declare it too (for tagging)
     # but are exempt from the cap below.
     drivers = load_drivers()
     if drivers is None:
         return fail("driver taxonomy unreadable "
-                    f"({DRIVER_TAXONOMY_PATH}) — bookings halted until K3N1 "
+                    f"({DRIVER_TAXONOMY_PATH}) — bookings halted until the framework "
                     "restores it", rctx)
     drv = (a.driver or "").strip().lower()
     if not drv:
@@ -768,11 +767,11 @@ def cmd_book(a):
         return fail(f"--driver '{drv}' not in taxonomy "
                     "(see hidden_files/driver_taxonomy.json)", rctx)
 
-    # Mikiri thesis schema (D-003, 2026-09-26, Gabe's directive): every thesis
+    # Mikiri thesis schema (D-003, the operator's directive): every thesis
     # must name the loser and tag the initiative. The opponent must be READ
     # before the duel is joined — an unreadable opponent fails validation,
     # and the rejection log is the unreadable-opponent log. Uniform schema:
-    # directives declare for tagging too (Gabe's orders are still exempt
+    # directives declare for tagging too (the operator's orders are still exempt
     # from the EV gate and caps, per the existing rules below).
     loser = (a.loser or "").strip()
     if len(loser) < MIKIRI_MIN_LOSER_LEN:
@@ -788,8 +787,8 @@ def cmd_book(a):
 
     explore = False  # X exploration account tags its originated rows
     if a.desk == "X" and not a.directive:
-        # X exploration account (2026-10-05 recharter, Gabe's directive;
-        # breadth-first 2026-10-06): no EV/mikiri gate — the gate is the
+        # X exploration account (recharter, the operator's directive;
+        # breadth-first): no EV/mikiri gate — the gate is the
         # assumed-risk model under test. The honesty gates above (price units,
         # settled universe, driver taxonomy, thesis schema) still bind.
         # kelly_size runs for edge_pts and win_p display only; the target
@@ -832,13 +831,13 @@ def cmd_book(a):
         win_p = a.p if a.side == "yes" else 1.0 - a.p
         eff_n, mikiri_exempt = None, None
 
-    # D-001 K1-bis interim regime (2026-09-27, R HUNT #2 adjudicated): a desk
+    # D-001 K1-bis interim regime (R HUNT #2 adjudicated): a desk
     # that fired K1-bis (majority of trailing-30d bookings mikiri-exempt —
     # Kelly-sizing on uncalibrated p's) books flat $0.10 minimum stakes until
     # its eff_n reaches MIKIRI_MIN_EFF_N. The EV/mikiri gates above still
     # apply — the regime de-risks sizing, never bypasses selection.
     # Directives are exempt: the regime binds the desk's origination, never
-    # Gabe's orders. Clearance is evaluated here, at booking time, so the
+    # The operator's orders. Clearance is evaluated here, at booking time, so the
     # regime lifts itself the moment calibration data exists.
     k1bis_interim = False
     if not a.directive:
@@ -880,12 +879,12 @@ def cmd_book(a):
             return fail(f"correlation: event family '{(fams & other).pop()}' already open "
                         f"({e['receipt_id']}, desk {e['desk']}) — one slot per cluster", rctx)
 
-    # Driver-concentration gate (2026-09-26, Gabe's flag): max DRIVER_CAP open
+    # Driver-concentration gate (the operator's flag): max DRIVER_CAP open
     # positions per macro driver across M/S/F/Q/C. X rows exempt (shadows
     # mirror by design; originated explorations have charter freedom — driver
     # still declared for the research record). DIRECTIVES ARE NOT EXEMPT —
-    # the cap is absolute (ruling 2026-09-26: "directive exemptions cannot
-    # bypass this absolute cap"); Gabe's orders declare --driver for tagging
+    # the cap is absolute (ruling: "directive exemptions cannot
+    # bypass this absolute cap"); the operator's orders declare --driver for tagging
     # and are still rejected on a full driver. Counts backfilled
     # grandfathered rows too — the 3 iran-geopolitics positions open at gate
     # launch stay, but a 4th pile-on is blocked.
@@ -899,7 +898,7 @@ def cmd_book(a):
                     f"max {DRIVER_CAP} per driver across desks; a third "
                     "pile-on is blocked", rctx)
 
-    # Honest fills (2026-10-06, N1K3's ordered plan, Gabe approved "breadth
+    # Honest fills (the reviewer's ordered plan, the operator approved "breadth
     # first"): the worker's --price is the LIMIT; this path walks the live
     # book and executes at VWAP. Replaces the 0.5c worker-applied haircut —
     # slippage now grows with size by construction, and each clip is capped
@@ -922,7 +921,7 @@ def cmd_book(a):
            "price_c": price_c, "p_yes": a.p, "win_p": round(win_p, 4),
            "edge_pts": round(edge_pts, 2) if edge_pts is not None else None,
            "size_usd": size, "family_declared": declared,
-           # Honest-fill record (2026-10-06): price_c/size_usd are EXECUTED
+           # Honest-fill record: price_c/size_usd are EXECUTED
            # (VWAP / filled). The request and the economics around it:
            "attempted_usd": round(req_size, 2),
            "unfilled_usd": round(req_size - size, 2),
@@ -933,7 +932,7 @@ def cmd_book(a):
            "fee_unknown": fill["fee_unknown"],
            "depth_1c_usd": fill["depth_1c_usd"],
            "fill_venue": fill["fill_venue"],
-           # Fill-model regime tag (2026-10-06): scoring panels split on
+           # Fill-model regime tag: scoring panels split on
            # this. Rows without the tag are v1 (0.5c haircut, no fees).
            "fill_model": "v2-bookwalk",
            "family_derived": derived, "driver": drv,
@@ -952,7 +951,7 @@ def cmd_book(a):
            # D-004 trap audit join: which pre-registered tripwire (if any)
            # authorized this booking attempt. Empty for loop-direct books.
            "trap_id": getattr(a, "trap_id", "") or "",
-           # Display fields for the PAPER.md projection (ruling #3, 2026-09-26).
+           # Display fields for the PAPER.md projection (ruling #3).
            # The projection FAILS LOUDLY on a missing thesis / ev_gate — these
            # are recorded here, at booking time, never hand-edited later.
            "thesis": (a.thesis or "").strip(),
@@ -1006,7 +1005,7 @@ def cmd_shadow(a):
     if any(e["desk"] == "X" and e["market"] == src["market"]
            for e in opens):
         return fail(f"X already shadows {src['market']} — never doubles a market")
-    # Cents/dollars by construction (2026-09-28): shadow had NO price
+    # Cents/dollars by construction: shadow had NO price
     # validation at all — a raw argparse float flowed straight into price_c.
     try:
         price_c = parse_price_cents(a.price, "--price")
@@ -1016,7 +1015,7 @@ def cmd_shadow(a):
                                  confirmed=getattr(a, "confirm_cents", False))
     if unit_err:
         return fail(unit_err)
-    # Honest fills (2026-10-06): shadows walk the book like any entry.
+    # Honest fills: shadows walk the book like any entry.
     # --attempted is the request; the fill is depth-capped at 1c of touch.
     try:
         fill = entry_fill(src["market"], a.side, a.attempted, price_c)
@@ -1059,9 +1058,9 @@ def cmd_shadow(a):
 def poller_price_cents(market_slug):
     """Resolve a ledger market slug to poller-cache cents.
 
-    slug -> WATCHLIST key -> nightwatch-prices.json px. Fail-closed: None
-    when unresolvable (never guess a price for an exit).
-    """
+ slug -> WATCHLIST key -> nightwatch-prices.json px. Fail-closed: None
+ when unresolvable (never guess a price for an exit).
+ """
     try:
         wl = json.load(open(os.path.join(ROOT, "desks", "WATCHLIST.json")))
         markets = wl.get("markets", {})
@@ -1107,7 +1106,7 @@ def cmd_exit(a):
         note = (note + " " + " ".join(tags)).strip()
     elif exit_price is None:
         return fail("exit requires --exit-price or --auto-price")
-    # Cents/dollars by construction (2026-09-28, hardened repair #2): a
+    # Cents/dollars by construction (hardened repair #2): a
     # dollars exit price would corrupt realized P&L exactly like a dollars
     # booking corrupts sizing. --auto-price is already int cents from the
     # poller. Deliberate asymmetry: allow_unverified=True — a dark feed must
@@ -1128,7 +1127,7 @@ def cmd_exit(a):
     entry = tgt["price_c"]
     shares = tgt["size_usd"] / (entry / 100.0)
     entry_fee = tgt.get("fee_usd", 0.0) or 0.0
-    # Honest exit (2026-10-06): walk the bid side when a snapshot exists, so
+    # Honest exit: walk the bid side when a snapshot exists, so
     # exit slippage is measured, not haircut-estimated. Fail-open: a dark
     # book must never block loss-capping — fall back to the worker/poller
     # price, tagged unverifiable. Explicit --exit-price acts as the limit
@@ -1146,11 +1145,11 @@ def cmd_exit(a):
     except FillError:
         pass
     # Side-agnostic P&L: the ledger prices the purchased token, so a No
-    # exited below its entry price is a LOSS, full stop. (2026-09-26: the old
+    # exited below its entry price is a LOSS, full stop. (: the old
     # No-branch computed (entry - exit_price) and printed +$6.77 on a -$6.77
     # exit. Ledger data was unaffected — the receipt carries exit_price_c
     # only — but the console lied. Now the print and the math agree.)
-    # 2026-10-06: P&L is net of entry + exit taker fees.
+    #: P&L is net of entry + exit taker fees.
     move = exit_price - entry
     pnl = round(move / 100.0 * shares - entry_fee - exit_fee_usd, 2)
     rec["realized_pnl_usd"] = pnl
@@ -1158,7 +1157,7 @@ def cmd_exit(a):
     rec["exit_fee_usd"] = exit_fee_usd
     rec["exit_fee_rate"] = exit_fee_rate
     rec["fill_model"] = "v2-bookwalk"
-    # X-shadow cascade (2026-09-29, R doctrine-hunt #3): an X shadow is a
+    # X-shadow cascade (R doctrine-hunt #3): an X shadow is a
     # mirror of its originator's thesis — when the originator exits, every
     # open shadow of it exits at the same price in the same atomic write.
     # Before this, shadows orphaned on originator exit and stayed "open"
@@ -1196,7 +1195,7 @@ def cmd_exit(a):
         closures[s["receipt_id"]] = {
             "close_action": "exit", "close_ts_cdt": rec["ts_cdt"],
             "close_price_c": exit_price, "realized_pnl_usd": spnl}
-    # Terminal closure (2026-09-26, Gabe's ruling #2): the book row itself is
+    # Terminal closure (the operator's ruling #2): the book row itself is
     # mutated to closed at rest — close action, timestamp, close price, and
     # final realized P&L. The exit receipt remains the append-only audit trail.
     ledger_append_and_close(new_entries, closures)
@@ -1233,17 +1232,17 @@ def realized_pnl(side, price_c, size_usd, outcome):
 
 def match_ws_keys(ws_pos, receipt):
     """worker_state position keys matching a ledger receipt — the keys
-    settle_write_worker_state is authorized to DELETE.
+ settle_write_worker_state is authorized to DELETE.
 
-    Exact key == receipt_id wins outright. The desk+side+entry-proximity
-    heuristic is only a fallback for legacy keys that predate receipt-id
-    keying — and it requires a recorded entry within 2c. A bare desk+side
-    match with entry=None is too weak for a destructive operation.
-    (2026-09-26: the ghost settle for bk-bootstrap-01 matched
-    bk-bootstrap-02 on a bare C/no with entry=None and DELETED a live,
-    unrelated position. The audit may reconcile weakly to *detect* drift;
-    deletion requires strong evidence.)
-    """
+ Exact key == receipt_id wins outright. The desk+side+entry-proximity
+ heuristic is only a fallback for legacy keys that predate receipt-id
+ keying — and it requires a recorded entry within 2c. A bare desk+side
+ match with entry=None is too weak for a destructive operation.
+ (: the ghost settle for bk-bootstrap-01 matched
+ bk-bootstrap-02 on a bare C/no with entry=None and DELETED a live,
+ unrelated position. The audit may reconcile weakly to *detect* drift;
+ deletion requires strong evidence.)
+ """
     rid = receipt.get("receipt_id")
     if rid in ws_pos:
         return [rid]
@@ -1279,10 +1278,10 @@ def write_json_doc(path, doc):
 
 def settle_write_ledger(targets, outcome, pnls, note):
     """Append one `settle` receipt per settled book row AND terminally close
-    the book rows (2026-09-26, Gabe's ruling #2 — terminal closure): status,
-    outcome, timestamp, and final realized P&L mutate onto the row itself, so
-    the ledger reads absolute reality at rest. The settle receipts remain the
-    append-only audit trail. Atomic with the row closures."""
+ the book rows (the operator's ruling #2 — terminal closure): status,
+ outcome, timestamp, and final realized P&L mutate onto the row itself, so
+ the ledger reads absolute reality at rest. The settle receipts remain the
+ append-only audit trail. Atomic with the row closures."""
     stamp = now_cdt().isoformat()
     receipts, closures = [], {}
     for e, (pnl, method) in zip(targets, pnls):
@@ -1302,7 +1301,7 @@ def settle_write_settled_json(market, outcome, resolved_cdt, evidence, rows):
     doc.setdefault("settled", {})
     doc["settled"][market] = {
         "outcome": outcome,
-        # yes_won is what brier.py outcome_for() reads — without it the
+        # yes_won is what brier.py outcome_for reads — without it the
         # pending shadow rows and PAPER.md ledger rows never grade.
         "yes_won": outcome == "YES",
         "resolved_cdt": resolved_cdt,
@@ -1315,8 +1314,8 @@ def settle_write_settled_json(market, outcome, resolved_cdt, evidence, rows):
 
 def settle_write_brier_shadow(market, targets, stamp):
     """File p-bearing rows into brier_shadow.json pending so they grade at
-    resolution. Directive rows (no p by design) and X shadows (unscored
-    sandbox) never enter — same rule as the mechanical-exit path."""
+ resolution. Directive rows (no p by design) and X shadows (unscored
+ sandbox) never enter — same rule as the mechanical-exit path."""
     doc = load_json_doc(BRIER_SHADOW, {"pending": [], "scored": []})
     doc.setdefault("pending", [])
     n = 0
@@ -1335,13 +1334,13 @@ def settle_write_brier_shadow(market, targets, stamp):
 
 
 def log_decision_features(a, rid, ts_cdt):
-    """ML instrumentation (2026-09-26, Gabe: "use ML if you think best"):
-    snapshot the funnel candidate's features at decision time into
-    hidden_files/decision_features.jsonl (append-only JSONL). Purely additive —
-    it never fails a booking and touches no gate. Joins to brier_shadow.json
-    scored rows on (market, desk, side) when the future calibration/proposer
-    trainer runs. funnel=null when the thesis didn't come from a funnel
-    candidate (worker passes --funnel-event only then)."""
+    """ML instrumentation (the operator: "use ML if you think best"):
+ snapshot the funnel candidate's features at decision time into
+ hidden_files/decision_features.jsonl (append-only JSONL). Purely additive —
+ it never fails a booking and touches no gate. Joins to brier_shadow.json
+ scored rows on (market, desk, side) when the future calibration/proposer
+ trainer runs. funnel=null when the thesis didn't come from a funnel
+ candidate (worker passes --funnel-event only then)."""
     try:
         snap = None
         want = (getattr(a, "funnel_event", "") or "").strip().lower()
@@ -1391,14 +1390,14 @@ def log_decision_features(a, rid, ts_cdt):
 def settle_write_worker_state(targets):
     """Remove settled positions from worker_state.json. Returns removed keys.
 
-    Schema note (2026-10-02): production worker_state.json carries
-    `positions` as a LIST of dicts with a 'key' field (the hourly worker's
-    schema), while older fixtures/tests use a dict keyed by receipt id.
-    Normalize the list to the dict schema the matcher expects, convert back
-    after. (Found when the f-anthropic-no settle crashed mid-write on
-    `ws_pos.items()` — the ledger and settled.json were already written;
-    the crash left the worker_state/WATCHLIST cleanup incomplete.)
-    """
+ Schema note: production worker_state.json carries
+ `positions` as a LIST of dicts with a 'key' field (the hourly worker's
+ schema), while older fixtures/tests use a dict keyed by receipt id.
+ Normalize the list to the dict schema the matcher expects, convert back
+ after. (Found when the f-anthropic-no settle crashed mid-write on
+ `ws_pos.items` — the ledger and settled.json were already written;
+ the crash left the worker_state/WATCHLIST cleanup incomplete.)
+ """
     ws = load_json_doc(WS_PATH, {})
     ws_pos = ws.get("positions", {})
     was_list = isinstance(ws_pos, list)
@@ -1417,7 +1416,7 @@ def settle_write_worker_state(targets):
 
 def settle_write_watchlist(market, outcome, stamp_short):
     """Drop the `position` field from WATCHLIST markets with this slug; the
-    market stays watched, the note records the settlement."""
+ market stays watched, the note records the settlement."""
     wl = load_json_doc(WATCHLIST_PATH, {})
     markets = wl.get("markets", {})
     touched = []
@@ -1444,8 +1443,8 @@ def _seg_norm(seg_head):
 
 def settle_write_status(removed_ws_keys):
     """Patch the '- Open positions (N):' heartbeat line: drop segments for
-    settled keys, decrement N. Best-effort — the hourly render regenerates
-    this file from worker_state.json anyway."""
+ settled keys, decrement N. Best-effort — the hourly render regenerates
+ this file from worker_state.json anyway."""
     if not removed_ws_keys:
         return True, "no worker_state positions removed — line untouched"
     try:
@@ -1502,10 +1501,10 @@ def verify_settle(market, receipt_ids):
 def fetch_gamma_market(slug):
     """Phase 1.2: fetch the gamma-api market payload for a .com slug.
 
-    Returns the market dict, or None on any transport/parse failure.
-    NIGHTWATCH_GAMMA_STUB (tests only): path to a JSON file mapping slug ->
-    payload; when set, the network is bypassed entirely.
-    """
+ Returns the market dict, or None on any transport/parse failure.
+ NIGHTWATCH_GAMMA_STUB (tests only): path to a JSON file mapping slug ->
+ payload; when set, the network is bypassed entirely.
+ """
     stub = os.environ.get("NIGHTWATCH_GAMMA_STUB")
     if stub:
         try:
@@ -1515,7 +1514,7 @@ def fetch_gamma_market(slug):
             return None
     import urllib.request
     url = "https://gamma-api.polymarket.com/markets?slug=" + slug
-    # gamma-api 403s the default urllib User-Agent (observed 2026-10-07) —
+    # gamma-api 403s the default urllib User-Agent (observed) —
     # without this header every .com lookup fails and entries fail closed.
     try:
         req = urllib.request.Request(
@@ -1529,21 +1528,21 @@ def fetch_gamma_market(slug):
 
 class FillError(Exception):
     """No honest fill available. Entries fail closed on this; exits fall back
-    (fail-open) because loss-capping must never be blocked by a dark feed."""
+ (fail-open) because loss-capping must never be blocked by a dark feed."""
 
 
 def fetch_book_snapshot(market_slug):
     """Fetch a live order-book snapshot for honest fills.
 
-    Returns (venue, bids, asks, aux): bids/asks are [(price01, size_shares)]
-    best-first; aux carries tags/token metadata. Raises FillError when no
-    snapshot exists.
+ Returns (venue, bids, asks, aux): bids/asks are [(price01, size_shares)]
+ best-first; aux carries tags/token metadata. Raises FillError when no
+ snapshot exists.
 
-    Resolution order: NIGHTWATCH_BOOK_STUB (tests: JSON slug -> {venue, bids,
-    asks, tags}) -> .com via gamma clobTokenIds -> CLOB /book -> .us via the
-    public gateway book endpoint. The venue is discovered by which API
-    answers; nothing is assumed from the slug.
-    """
+ Resolution order: NIGHTWATCH_BOOK_STUB (tests: JSON slug -> {venue, bids,
+ asks, tags}) -> .com via gamma clobTokenIds -> CLOB /book -> .us via the
+ public gateway book endpoint. The venue is discovered by which API
+ answers; nothing is assumed from the slug.
+ """
     stub = os.environ.get("NIGHTWATCH_BOOK_STUB")
     if stub:
         try:
@@ -1564,7 +1563,7 @@ def fetch_book_snapshot(market_slug):
         tids = payload.get("clobTokenIds")
         if isinstance(tids, str):
             # gamma-api returns clobTokenIds as a JSON-encoded STRING, not a
-            # list (observed 2026-10-07); tids[0] on the raw string is "[",
+            # list (observed); tids[0] on the raw string is "[",
             # which built a garbage token_id URL and 404'd every .com book.
             try:
                 tids = json.loads(tids)
@@ -1575,7 +1574,7 @@ def fetch_book_snapshot(market_slug):
                             "clobTokenIds — cannot walk the book")
         import urllib.request
         url = ("https://clob.polymarket.com/book?token_id=" + str(tids[0]))
-        # CLOB also 403s the default urllib User-Agent (observed 2026-10-07)
+        # CLOB also 403s the default urllib User-Agent (observed)
         try:
             req = urllib.request.Request(
                 url, headers={"User-Agent": "nightwatch-funnel/1.0"})
@@ -1615,10 +1614,10 @@ def _fee_for(venue, tags, shares, vwap01):
 def entry_fill(market, side, size_usd, limit_c):
     """Walk the live book for an entry (always a buy of the side's token).
 
-    limit_c (cents) is the worker's --price, acting as the limit: nothing
-    fills above it. The clip is additionally capped at the depth the book
-    absorbs within 1c of the touch. Returns the fill record; raises FillError.
-    """
+ limit_c (cents) is the worker's --price, acting as the limit: nothing
+ fills above it. The clip is additionally capped at the depth the book
+ absorbs within 1c of the touch. Returns the fill record; raises FillError.
+ """
     if fe is None:
         raise FillError("fill_engine unavailable — refusing rather than "
                         "booking at an unverified price")
@@ -1634,7 +1633,7 @@ def entry_fill(market, side, size_usd, limit_c):
     # before the depth cap and the walk, so VWAP <= limit_c by construction.
     # This is also what keeps the EV/mikiri gate (evaluated at the limit
     # price) conservative: edge at the walked fill is always >= edge at the
-    # gate price. (2026-10-06: the walk previously filled up to 1c above the
+    # gate price. (: the walk previously filled up to 1c above the
     # limit via the depth tolerance, overstating gate edge by up to ~1pt.)
     asks_asc = [a for a in asks_asc if a[0] * 100.0 <= limit_c + 1e-9]
     depth_1c = fe.depth_within_cents(asks_asc, touch01)
@@ -1661,10 +1660,10 @@ def entry_fill(market, side, size_usd, limit_c):
 def exit_fill(market, side, shares, limit_c=None):
     """Walk the bid side for an exit (selling the held token).
 
-    limit_c (cents): don't sell below this (the worker's --exit-price).
-    None = take the book as-is (--auto-price). Raises FillError when the
-    book can't fill within the limit; the caller falls back fail-open.
-    """
+ limit_c (cents): don't sell below this (the worker's --exit-price).
+ None = take the book as-is (--auto-price). Raises FillError when the
+ book can't fill within the limit; the caller falls back fail-open.
+ """
     if fe is None:
         raise FillError("fill_engine unavailable")
     venue, bids, asks, aux = fetch_book_snapshot(market)
@@ -1694,14 +1693,14 @@ def exit_fill(market, side, shares, limit_c=None):
 def classify_gamma_resolution(payload):
     """Phase 1.2: classify a gamma-api market payload for resolution.
 
-    Returns (status, yes_won_or_None, evidence). Pure function — no I/O.
-      RESOLVED  — closed with decisive outcomePrices ([1,0] => YES won,
-                  [0,1] => NO won). Only this status auto-settles.
-      OPEN      — venue reports the market still open.
-      AMBIGUOUS — closed but the outcome is not decisive. Never auto-settled;
-                  goes to the human review queue (fail-closed on ambiguity).
-      ERROR     — payload missing/unreadable. Never auto-settled.
-    """
+ Returns (status, yes_won_or_None, evidence). Pure function — no I/O.
+ RESOLVED — closed with decisive outcomePrices ([1,0] => YES won,
+ [0,1] => NO won). Only this status auto-settles.
+ OPEN — venue reports the market still open.
+ AMBIGUOUS — closed but the outcome is not decisive. Never auto-settled;
+ goes to the human review queue (fail-closed on ambiguity).
+ ERROR — payload missing/unreadable. Never auto-settled.
+ """
     if not isinstance(payload, dict):
         return ("ERROR", None, "empty/unreadable venue payload")
     if not payload.get("closed"):
@@ -1735,16 +1734,16 @@ def _resolve_review(market, detail):
 def cmd_resolve_sweep(a):
     """Phase 1.2: detect actual venue resolutions for open positions.
 
-    For each open position, map the ledger market to its venue slug via
-    WATCHLIST.json and check the venue. RESOLVED markets auto-settle through
-    cmd_settle's immutable path — same writer, same receipts, same
-    verification (no second settlement mechanism). OPEN markets are skipped.
-    AMBIGUOUS/ERROR go to hidden_files/resolution_review.jsonl, never
-    auto-settled. The .us venue has no verified resolution endpoint, so .us
-    markets always queue for review. --dry-run reports without writing.
-    Settle stays live under kill (this only closes exposure), so this
-    subcommand is ungated like settle.
-    """
+ For each open position, map the ledger market to its venue slug via
+ WATCHLIST.json and check the venue. RESOLVED markets auto-settle through
+ cmd_settle's immutable path — same writer, same receipts, same
+ verification (no second settlement mechanism). OPEN markets are skipped.
+ AMBIGUOUS/ERROR go to hidden_files/resolution_review.jsonl, never
+ auto-settled. The .us venue has no verified resolution endpoint, so .us
+ markets always queue for review. --dry-run reports without writing.
+ Settle stays live under kill (this only closes exposure), so this
+ subcommand is ungated like settle.
+ """
     entries = load_ledger()
     opens = open_positions(entries)
     if not opens:
@@ -1758,7 +1757,7 @@ def cmd_resolve_sweep(a):
         return 1
     settled_n = skipped_n = review_n = 0
     # WATCHLIST is keyed by short key but ledger rows carry the venue slug
-    # (2026-10-02: the direct wl.get(m) lookup never matched slug-keyed
+    # (: the direct wl.get(m) lookup never matched slug-keyed
     # markets, so the sweep review-queued every open market with the
     # misleading "no WATCHLIST entry" reason instead of the correct
     # venue-based reason — the 10-01 "settle today" never executed).
@@ -1829,7 +1828,7 @@ def cmd_settle(a):
     entries = load_ledger()
     targets = [e for e in open_positions(entries) if e.get("market") == market]
     if settled_entry is not None:
-        # Ghost-state completion (2026-09-26, Gabe's ruling #2 — terminal
+        # Ghost-state completion (the operator's ruling #2 — terminal
         # closure): settled.json recorded this market's resolution, but the
         # ledger rows were never closed — the old settled.json exclusion
         # filter hid them instead of settling them. This is NOT a
@@ -1886,15 +1885,15 @@ def cmd_settle(a):
 def settle_finish(market, outcome, targets, pnls, stamp_short, disp_short,
                   evidence, note, write_settled_json):
     """Shared write+verify tail for both settle paths (normal + ghost-state
-    completion). Write order: ledger (settle receipts + terminal row closure)
-    -> settled.json (normal path only) -> brier shadow -> worker_state ->
-    WATCHLIST -> STATUS.md, then verify. Re-running completes
-    missing pieces; settled.json entries are never duplicated.
+ completion). Write order: ledger (settle receipts + terminal row closure)
+ -> settled.json (normal path only) -> brier shadow -> worker_state ->
+ WATCHLIST -> STATUS.md, then verify. Re-running completes
+ missing pieces; settled.json entries are never duplicated.
 
-    PAPER.md is deliberately NOT written here (2026-09-26, Gabe's ruling
-    #3): the JSON ledger is the singular source of truth and PAPER.md is a
-    deterministic projection built by build_paper_view.py, run as the hourly
-    worker's final step. book_trade.py never mutates Markdown."""
+ PAPER.md is deliberately NOT written here (the operator's ruling
+ #3): the JSON ledger is the singular source of truth and PAPER.md is a
+ deterministic projection built by build_paper_view.py, run as the hourly
+ worker's final step. book_trade.py never mutates Markdown."""
     stamp = now_cdt().isoformat()
     settle_write_ledger(targets, outcome, pnls, note)
     rows = {e["receipt_id"]: {"desk": e["desk"], "side": e["side"],
@@ -1939,13 +1938,13 @@ def cmd_ledger(_a):
 
 
 def cmd_set_display(a):
-    """Patch display fields on a book row (ruling #3, 2026-09-26).
+    """Patch display fields on a book row (ruling #3).
 
-    The PAPER.md projection is generated; these fields are the sanctioned
-    repair path when the projection fails loudly on a missing thesis/ev_gate,
-    or when a row's Notes need a timestamped annotation. Metadata only —
-    never changes status, prices, or P&L.
-    """
+ The PAPER.md projection is generated; these fields are the sanctioned
+ repair path when the projection fails loudly on a missing thesis/ev_gate,
+ or when a row's Notes need a timestamped annotation. Metadata only —
+ never changes status, prices, or P&L.
+ """
     entries = load_ledger()
     target = next((e for e in entries
                    if e.get("action") == "book"
@@ -2004,8 +2003,8 @@ def cmd_audit(_a):
             # positions as a list keyed by market; index it by market key
             # for reconciliation. Exact receipt_id match is unavailable in
             # this form -> the desk+side+entry fallback below applies,
-            # failing closed on ambiguity. (fixed 2026-09-27 22:52 CDT;
-            # audit previously crashed here with AttributeError.)
+            # failing closed on ambiguity. (A previous fix stopped the
+            # audit crashing here with AttributeError.)
             idx = {}
             for p in ws_pos:
                 k = p.get("market") or p.get("key")
@@ -2074,7 +2073,7 @@ def cmd_audit(_a):
             issues.append(f"AMBIGUOUS: ledger {e['receipt_id']} ({e['desk']} {e['market']}) "
                           f"claimed by {len(claims)} worker_state keys {claims} — "
                           f"duplicate assignment, reconcile by receipt_id")
-    # X-shadow orphan check (2026-09-29, R doctrine-hunt #3 backstop): every
+    # X-shadow orphan check (R doctrine-hunt #3 backstop): every
     # open X shadow carrying a shadow_of link must point at an OPEN
     # originator book row. The exit cascade closes shadows with their
     # originator; this catches anything that slipped through (pre-cascade
@@ -2142,7 +2141,7 @@ def cmd_bootstrap(_a):
 
 
 def fail(msg, ctx=None):
-    # Proposer contract (2026-09-24): rejections are LOGGED, never silently
+    # Proposer contract: rejections are LOGGED, never silently
     # clipped. A learner that can't see its rejections can't improve.
     # ctx = {"action","desk","market","proposer_id"} supplied by cmd_book.
     if ctx:
@@ -2172,13 +2171,13 @@ def main():
                    help="price in CENTS, e.g. 87 = 87c (dollars are rejected by the unit tripwire)")
     b.add_argument("--p", type=float, required=True, help="P(Yes resolves true)")
     b.add_argument("--family", required=True)
-    # Driver-concentration gate (2026-09-26): macro driver from the K3N1-owned
+    # Driver-concentration gate: macro driver from the framework-owned
     # taxonomy. Required on every booking; the cap is ABSOLUTE — directives
     # declare for tagging but are NOT exempt. Unknown keys REJECT.
     b.add_argument("--driver", default="",
                    help="macro driver, e.g. iran-geopolitics (required; see "
                         "hidden_files/driver_taxonomy.json)")
-    # Mikiri thesis schema (D-003, 2026-09-26): the named loser and the
+    # Mikiri thesis schema (D-003): the named loser and the
     # initiative tag. Required on every booking (directives declare for
     # tagging); validated in code so failures REJECT through the logged path.
     b.add_argument("--loser", default="",
@@ -2188,7 +2187,7 @@ def main():
                         "(required)")
     b.add_argument("--directive", action="store_true")
     b.add_argument("--note", default="")
-    # Display fields for the PAPER.md projection (ruling #3, 2026-09-26):
+    # Display fields for the PAPER.md projection (ruling #3):
     # the 1-line thesis and the EV-gate label. The projection FAILS LOUDLY
     # on rows missing them — pass them at booking time, don't hand-edit.
     b.add_argument("--thesis", default="",
@@ -2202,7 +2201,7 @@ def main():
                         "receipt for trap audit; the booking passes through "
                         "every gate identically — a trap authorizes the "
                         "attempt, never the outcome.")
-    # ML instrumentation (2026-09-26): funnel event slug (or one of its market
+    # ML instrumentation: funnel event slug (or one of its market
     # slugs) when the thesis originated from a funnel candidate. Used only to
     # snapshot decision-time features into decision_features.jsonl for future
     # calibration/proposer training — never affects the booking.
@@ -2211,7 +2210,7 @@ def main():
                         "(optional; enables decision-feature logging)")
     b.add_argument("--nominate-real", action="store_true")
     b.add_argument("--r-rating", choices=["HARD", "SOFT", "MISS"], default=None)
-    # Proposer contract (2026-09-24): a learned/statistical proposer may advise
+    # Proposer contract: a learned/statistical proposer may advise
     # a booking, but size_suggestion is advisory only — the script computes the
     # Kelly size and the suggestion is logged for scoring, never executed.
     b.add_argument("--proposer", default="",
@@ -2265,7 +2264,7 @@ def main():
                     help='resolution timestamp "YYYY-MM-DD HH:MM"; default now')
     st.add_argument("--note", default="")
 
-    # Display-field repair (ruling #3, 2026-09-26): the sanctioned path for
+    # Display-field repair (ruling #3): the sanctioned path for
     # fixing a projection FAIL on missing thesis/ev_gate, or annotating a
     # row's Notes. Metadata only — never touches status/prices/P&L.
     sd = sub.add_parser("set-display")
@@ -2298,7 +2297,7 @@ def main():
     # keeping a dead position on the books.
     # The doctrine trip (hidden_files/doctrine.trip, written ONLY by
     # bin/trip_doctrines.py on kill-class proposals for D-001/D-003/D-004,
-    # cleared ONLY by K3N1/Gabe) severs new risk through this SAME path —
+    # cleared ONLY by the framework/the operator) severs new risk through this SAME path —
     # one condition, same exit 4, no second mechanism.
     # The stream watchdog (Phase 2.1) adds two more conditions, same path:
     # Layer 1 = the supervisor daemon's stream_health.trip file (fast,

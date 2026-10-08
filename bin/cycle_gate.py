@@ -6,14 +6,14 @@ nothing (observed: full cycles returning 20 evaluated / 0 trades / 20 passes).
 This script computes the gate from disk state alone — no LLM judgment — so the
 cron body can route BEFORE the worker reads the 30KB skill file:
 
-  KILL  -> kill.switch or doctrine.trip present: exits-only kill mode.
-  LIGHT -> all quiet: hook live, no wake in 65m, no position within 3c of warn,
-           r_pending empty, no pending key request, hook not blind.
-  FULL  -> anything else (names the failed gate).
+ KILL -> kill.switch or doctrine.trip present: exits-only kill mode.
+ LIGHT -> all quiet: hook live, no wake in 65m, no position within 3c of warn,
+ r_pending empty, no pending key request, hook not blind.
+ FULL -> anything else (names the failed gate).
 
 Reads: hook log, hook price cache, worker_state.json, market_meta.json,
-       real_money_request.json, kill.switch / doctrine.trip.
-SCHEMA NOTES (verify against sources before changing these reads; 2026-09-26 EVENT):
+ real_money_request.json, kill.switch / doctrine.trip.
+SCHEMA NOTES (verify against sources before changing these reads; EVENT):
 - market_meta.json = {"_comment": str, "markets": {hook_key: {slug, resolves, ...}}} — unwrap "markets".
 - worker_state.json positions = {bid: {market, side, entry_c, adverse_c, px_held, desk}} — entry_c, NOT "entry".
 - hook nightwatch-prices.json px is the YES-side price: held_px = px (yes) else 1-px (no).
@@ -88,7 +88,7 @@ def main():
     prices = load_json(HOOK_PRICES, {})
     slug_to_key = {}
     for key, m in (meta.items() if isinstance(meta, dict) else []):
-        # 2026-09-27 23:50 CDT: index by the meta DICT KEY (the worker_state/hook id,
+        #: index by the meta DICT KEY (the worker_state/hook id,
         # e.g. 'iran-ceasefire-sep30') as well as the "slug" field, which is the
         # Polymarket URL slug and never matches a position's market id.
         slug_to_key.setdefault(key, key)
@@ -99,7 +99,7 @@ def main():
     if isinstance(_pos, dict):
         pos_iter = _pos.items()
     elif isinstance(_pos, list):
-        # 2026-09-27 23:48 CDT: worker_state positions moved to a list schema:
+        #: worker_state positions moved to a list schema:
         # [{market, desk, side ("Yes"/"No"), entry_yes_c/entry_no_c, adverse_c, state}].
         # Normalize to the {bid: {market, side, entry_c}} shape the check below wants.
         pos_iter = []
@@ -111,15 +111,15 @@ def main():
                 "side": str(q.get("side", "")).lower(),
                 "entry": q.get("entry"),
             }
-            # 2026-10-04 21:48 CDT fix: only carry entry_c when a real value
+            # fix: only carry entry_c when a real value
             # is present. An unconditional "entry_c": None shadowed the
             # legacy "entry" fallback, so legacy-schema rows failed closed
             # as "bad schema" instead of being evaluated.
             _ec = q.get("entry_c", q.get("entry_yes_c", q.get("entry_no_c")))
             if _ec is not None:
                 _norm["entry_c"] = _ec
-            # 2026-10-07 17:48 CDT fix: the producer writes entry_yes_px /
-            # entry_no_px (dollars) on every row (8/8 rows on 2026-10-07), and
+            # fix: the producer writes entry_yes_px /
+            # entry_no_px (dollars) on every row (8/8 rows on), and
             # the check below has a dedicated dollars branch for them — but the
             # normalization dropped the keys, so every row failed closed as
             # "bad schema" and every quiet hour forced FULL. Carry them through.
@@ -127,7 +127,7 @@ def main():
                 if isinstance(q.get(_pxk), (int, float)):
                     _norm[_pxk] = q[_pxk]
             pos_iter.append((
-                # 2026-09-30 21:48 CDT fix: worker_state positions use "key", not
+                # fix: worker_state positions use "key", not
                 # "market" — fall back to "key" or the empty slug suffix-matches
                 # the first map key ("".startswith(s) is False but
                 # s.startswith("") is True), pulling a wrong market's price and
@@ -144,9 +144,9 @@ def main():
         side = str(side).lower() if side is not None else side
         # entry_c is CENTS per the contract above (matches book_ledger price_c);
         # held_px is dollars. Convert before comparing. Legacy "entry" key was dollars.
-        # 2026-09-28 04:48 CDT: worker_state dict-branch schema drifted to
+        #: worker_state dict-branch schema drifted to
         # {side: "Yes"/"No" (capitalized), entry_yes_px: dollars YES price} — normalize.
-        # 2026-10-07 17:50 CDT fix: the condition checked `"entry" not in p`, but
+        # fix: the condition checked `"entry" not in p`, but
         # the list normalization above ALWAYS sets the "entry" key (possibly None),
         # so the dollars branch could never fire for normalized rows. Test the value,
         # not the key's presence: absent key and None entry are equivalent here.
@@ -154,7 +154,7 @@ def main():
             ey = p["entry_yes_px"]
             entry_raw = ey if side == "yes" else 1.0 - ey  # position-side entry, dollars
         else:
-            # 2026-09-28 21:58 CDT: worker_state dict-branch uses side-native
+            #: worker_state dict-branch uses side-native
             # cents (entry_yes_c/entry_no_c); select by side, else fall back.
             cands = {"yes": p.get("entry_yes_c"), "no": p.get("entry_no_c")}
             side_c = cands.get(side) if side in cands else None
@@ -168,7 +168,7 @@ def main():
         key = slug_to_key.get(slug)
         if key is None:  # suffix-tolerant match (slugs like ...-20260917)
             for s, k in slug_to_key.items():
-                # 2026-09-30 21:48 CDT fix: never suffix-match an empty slug —
+                # fix: never suffix-match an empty slug —
                 # s.startswith("") is True for every key and would map to the
                 # first key alphabetically (phantom adverse, see note above).
                 if slug and (slug.startswith(s) or s.startswith(slug)):
@@ -189,7 +189,7 @@ def main():
         if px is None:
             return verdict("FULL", ["position %s: no hook price for %s" % (bid, key)], now_ms)
         held_px = px if side == "yes" else 1.0 - px  # hook px is the YES price; held_px is the POSITION-side price
-        # 2026-09-27 10:48 CDT correction: adverse = entry - held_px for BOTH sides
+        # correction: adverse = entry - held_px for BOTH sides
         # (positive = position lost value = against us). The 03:55 "sign fix" set the
         # no-branch to (held_px - entry), which reads a genuine loss as negative
         # "favorable" (e.g. F No@13 with no-px 5.5c -> -7.5c) and blinds check #3 to
