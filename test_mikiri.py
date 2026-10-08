@@ -196,7 +196,7 @@ def test_directive_requires_schema():
         check("t6 directive without schema REJECTs", r.returncode == 3,
               r.stdout + r.stderr)
         r2 = book(home, market="mikiri-dir2", extra=("--directive",),
-                  loser="the operator's direct order", sen="no_signal")
+                  loser="the operator's direct order", sen="ken_no_sen")
         check("t6 directive with schema ACCEPTs", r2.returncode == 0,
               r2.stdout + r2.stderr)
 

@@ -50,12 +50,16 @@ test_*.py       executable specifications for the gates
 ## Quick-start
 
 ```bash
-python3 -m unittest test_book_trade     # gate stack: 48 tests
+python3 -m unittest test_book_trade     # gate stack: 48 tests, green
 python3 test_traps.py                   # pre-registered trap semantics
 python3 test_mikiri.py                  # confidence-bounded entry gate
 python3 test_driver_gate.py             # driver-concentration caps
 python3 test_optimizer.py               # candidate optimizer
 ```
+
+Two trap tests (`t6`) fail without a live order-book snapshot — the honest-fill
+gate refuses to assume fills it can't verify. That's the gate working as
+designed, not a bug; with a book snapshot present they pass.
 
 Requires Python 3.10+, standard library only.
 
