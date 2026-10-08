@@ -3,7 +3,7 @@ __pycache__/
 .env
 *.key
 *.pem
-hidden_files/
+hidden_files/*
 !hidden_files/driver_taxonomy.json
 # desks/WATCHLIST.json is tracked (positions stripped) as a test fixture
 *.log
