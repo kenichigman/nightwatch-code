@@ -20,8 +20,8 @@ import testutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 TRAPS = os.path.join(HERE, "bin", "traps.py")
 BOOK = os.path.join(HERE, "book_trade.py")
-REAL_TAXONOMY = os.path.join(HERE, "hidden_files", "driver_taxonomy.json")
-REAL_WATCHLIST = os.path.join(HERE, "desks", "WATCHLIST.json")
+REAL_TAXONOMY = os.path.join(HERE, "fixtures", "driver_taxonomy.json")
+REAL_WATCHLIST = os.path.join(HERE, "fixtures", "markets.json")
 GOAL_SUBPATH = testutil.GOAL_SUBPATH
 DRV = "tech-culture"
 

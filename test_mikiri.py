@@ -16,7 +16,7 @@ import testutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, "book_trade.py")
-REAL_TAXONOMY = os.path.join(HERE, "hidden_files", "driver_taxonomy.json")
+REAL_TAXONOMY = os.path.join(HERE, "fixtures", "driver_taxonomy.json")
 GOAL_SUBPATH = testutil.GOAL_SUBPATH
 
 
