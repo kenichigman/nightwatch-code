@@ -1,0 +1,133 @@
+{
+  "_comment": "Test fixture: public prediction-market metadata (slugs, step sizes, venues) for gate tests. Notes are neutral fixture descriptions; no live data.",
+  "band_hi": [
+    0.78,
+    0.97
+  ],
+  "band_lo": [
+    0.03,
+    0.22
+  ],
+  "markets": {
+    "aja-wilson-mvp": {
+      "note": "Test fixture: 2026 WNBA MVP award market (.com).",
+      "slug": "will-aja-wilson-win-the-2026-wnba-mvp-award",
+      "step": 0.04,
+      "venue": "com"
+    },
+    "f-btc-no": {
+      "note": "Test fixture: Bitcoin $150K-by-September market, No side (.us).",
+      "slug": "cpc-btc-150k-09-30-2026",
+      "step": 0.04,
+      "venue": "us"
+    },
+    "f-ceasefire-oct31": {
+      "note": "Test fixture: US–Iran ceasefire-through-October-31 market (.com).",
+      "slug": "us-x-iran-ceasefire-continues-through-october-31-20260917",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "f-hormuz-traffic-no": {
+      "note": "Test fixture: Strait of Hormuz traffic normalization market (.com).",
+      "slug": "strait-of-hormuz-traffic-returns-to-normal-by-december-31",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "f-openai-no": {
+      "note": "Test fixture: OpenAI-related dated market, No side (.us).",
+      "slug": "ipcc-openai-2026-09-30",
+      "step": 0.04,
+      "venue": "us"
+    },
+    "fed-hike-2026": {
+      "note": "Test fixture: 2026 Fed rate-hike market (.com).",
+      "slug": "another-fed-rate-hike-in-2026",
+      "step": 0.04,
+      "venue": "com"
+    },
+    "fed-oct-hike25": {
+      "note": "Test fixture: October 2026 FOMC 25bp hike market (.com).",
+      "slug": "will-the-fed-increase-interest-rates-by-25-bps-after-the-october-2026-meeting-20260617190324032",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "fed-oct-nochange": {
+      "note": "Test fixture: October 2026 FOMC no-change market (.com).",
+      "slug": "will-there-be-no-change-in-fed-interest-rates-after-the-october-2026-meeting-20260617190324031",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "q-ws-atl": {
+      "note": "Test fixture: 2026 World Series futures — Atlanta (.us).",
+      "slug": "tec-mlb-champ-2026-09-27-atl",
+      "step": 0.05,
+      "venue": "us"
+    },
+    "q-ws-bos": {
+      "note": "Test fixture: 2026 World Series futures — Boston (.us).",
+      "slug": "tec-mlb-champ-2026-09-27-bos",
+      "step": 0.05,
+      "venue": "us"
+    },
+    "q-ws-lad": {
+      "note": "Test fixture: 2026 World Series futures — LA Dodgers (.us).",
+      "slug": "tec-mlb-champ-2026-09-27-lad",
+      "step": 0.05,
+      "venue": "us"
+    },
+    "q-ws-mil": {
+      "note": "Test fixture: 2026 World Series futures — Milwaukee (.us).",
+      "slug": "tec-mlb-champ-2026-09-27-mil",
+      "step": 0.05,
+      "venue": "us"
+    },
+    "q-ws-nyy": {
+      "note": "Test fixture: 2026 World Series futures — NY Yankees (.us).",
+      "slug": "tec-mlb-champ-2026-09-27-nyy",
+      "step": 0.05,
+      "venue": "us"
+    },
+    "q-ws-tb": {
+      "note": "Test fixture: 2026 World Series futures — Tampa Bay (.us).",
+      "slug": "tec-mlb-champ-2026-09-27-tb",
+      "step": 0.05,
+      "venue": "us"
+    },
+    "us-invade-iran": {
+      "note": "Test fixture: US invades Iran before 2027 market (.com).",
+      "slug": "will-the-us-invade-iran-before-2027",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "will-china-invade-taiwan-before-2027": {
+      "note": "Test fixture: China invades Taiwan before 2027 market (.com).",
+      "slug": "will-china-invade-taiwan-before-2027",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "x-btc-105k-oct2026": {
+      "note": "Test fixture: Bitcoin reaches $105K in October 2026 market (.com).",
+      "slug": "will-bitcoin-reach-105k-in-october-2026",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "x-buttigieg-2028-dem-nom": {
+      "note": "Test fixture: 2028 Democratic nomination market — Buttigieg (.com).",
+      "slug": "will-pete-buttigieg-win-the-2028-democratic-presidential-nomination-687",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "x-newsom-2028-dem-nom": {
+      "note": "Test fixture: 2028 Democratic nomination market — Newsom (.com).",
+      "slug": "will-gavin-newsom-win-the-2028-democratic-presidential-nomination-568",
+      "step": 0.05,
+      "venue": "com"
+    },
+    "x-shapiro-2028-dem-nom": {
+      "note": "Test fixture: 2028 Democratic nomination market — Shapiro (.com).",
+      "slug": "will-josh-shapiro-win-the-2028-democratic-presidential-nomination-977",
+      "step": 0.05,
+      "venue": "com"
+    }
+  }
+}
